@@ -41,7 +41,7 @@ var HighLevelConsumer = function (client, topics, options) {
     this.ready = false;
     this.paused = this.options.paused;
     this.rebalancing = false;
-    this.id = this.options.groupId + '_' + uuid.random();
+    this.id = this.options.id || this.options.groupId + '_' + uuid.random();
     this.payloads = this.buildPayloads(topics);
     this.topicPayloads = this.buildTopicPayloads(topics);
     this.topicList = [];
@@ -308,13 +308,29 @@ HighLevelConsumer.prototype.connect = function () {
         self.client.removeListener('brokersChanged', rebalance);
     }
 
-    this.client.zk.on('error', function (err) {
+    function attachZookeeperErrorListener() {
+        self.client.zk.on('error', function (err) {
         self.emit('error', err);
+    });
+    }
+
+    attachZookeeperErrorListener();
+
+    this.client.on('zkReconnect', function () {
+        attachZookeeperErrorListener();
+
+        self.registerConsumer(function () {
+            rebalance();
+        });
     });
 
     this.client.on('error', function (err) {
         self.emit('error', err);
     });
+
+    this.client.on('reconnect', function(lastError){
+        self.fetch();
+    })
 
     this.client.on('close', function () {
         debug('close');
@@ -549,6 +565,11 @@ HighLevelConsumer.prototype.updateOffsets = function (topics, initing) {
 };
 
 function autoCommit(force, cb) {
+    if (arguments.length === 1) {
+        cb = force;
+        force = false;
+    }
+
     if (this.committing && !force) return cb(null, 'Offset committing');
 
     this.committing = true;

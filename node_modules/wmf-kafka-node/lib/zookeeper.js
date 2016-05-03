@@ -21,6 +21,9 @@ var Zookeeper = function (connectionString, options) {
     this.client.on('connected', function () {
         that.listBrokers();
     });
+    this.client.on('disconnected', function () {
+        that.emit('disconnected');
+    });
     this.client.connect();
 };
 
@@ -160,7 +163,7 @@ Zookeeper.prototype.getConsumersPerTopic = function (groupId, cb) {
                                             cbb();
                                         } catch (e) {
                                             debug(e);
-                                            callback(new Error("Unable to assemble data"));
+                                            cbb(new Error("Unable to assemble data"));
                                         }
                                     }
                                 }

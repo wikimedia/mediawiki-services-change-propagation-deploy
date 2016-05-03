@@ -10,6 +10,7 @@ var net  = require('net'),
     Binary = require('binary'),
     getCodec = require('./codec'),
     protocol = require('./protocol'),
+    BrokerWrapper = require('./wrapper/BrokerWrapper'),
     encodeMessageSet = protocol.encodeMessageSet,
     Message = protocol.Message,
     zk = require('./zookeeper'),
@@ -30,9 +31,13 @@ var net  = require('net'),
  * @param {String} [clientId='kafka-node-client'] The client id to register with zookeeper, helpful for debugging
  * @param {Object} zkOptions Pass through options to the zookeeper client library
  *
+ * @param {Object} noAckBatchOptions Batch buffer options for no ACK requirement producers
+ * - noAckBatchOptions.noAckBatchSize Max batch size in bytes for the buffer before sending all data to broker
+ * - noAckBatchOptions.noAckBatchAge Timeout max for the buffer to retain data before sending all data to broker
+ *
  * @constructor
  */
-var Client = function (connectionString, clientId, zkOptions) {
+var Client = function (connectionString, clientId, zkOptions, noAckBatchOptions) {
     if (this instanceof Client === false) {
         return new Client(connectionString, clientId);
     }
@@ -40,6 +45,7 @@ var Client = function (connectionString, clientId, zkOptions) {
     this.connectionString = connectionString || 'localhost:2181/';
     this.clientId = clientId || 'kafka-node-client';
     this.zkOptions = zkOptions;
+    this.noAckBatchOptions = noAckBatchOptions;
     this.brokers = {};
     this.longpollingBrokers = {};
     this.topicMetadata = {};
@@ -78,6 +84,13 @@ Client.prototype.connect = function () {
             self.emit('brokersChanged');
         }, 3000);
     });
+    zk.once('disconnected', function () {
+        if (!zk.closed) {
+            zk.close();
+            self.connect();
+            self.emit('zkReconnect');
+        }
+    })
     zk.on('error', function (err) {
         self.emit('error', err);
     });
@@ -92,8 +105,8 @@ Client.prototype.close = function (cb) {
 
 Client.prototype.closeBrokers = function (brokers) {
     _.each(brokers, function (broker) {
-        broker.closing = true;
-        broker.end();
+        broker.socket.closing = true;
+        broker.socket.end();
     });
 };
 
@@ -218,11 +231,11 @@ Client.prototype.loadMetadataForTopics = function (topics, cb) {
     var request = protocol.encodeMetadataRequest(this.clientId, correlationId, topics);
     var broker = this.brokerForLeader();
 
-    if (!broker || broker.error) {
+    if (!broker || !broker.socket || broker.socket.error) {
         return cb(new errors.BrokerNotAvailableError('Broker not available'));
     }
 
-    this.queueCallback(broker, correlationId, [protocol.decodeMetadataResponse, cb]);
+    this.queueCallback(broker.socket, correlationId, [protocol.decodeMetadataResponse, cb]);
     broker.write(request);
 };
 
@@ -318,15 +331,6 @@ Client.prototype.nextSocketId = function () {
     return this._socketId++;
 };
 
-Client.prototype.nextPartition = (function cycle() {
-    var c = 0;
-    return function (topic) {
-        if (_.isEmpty(this.topicPartitions)) return 0;
-        if (_.isEmpty(this.topicPartitions[topic])) return 0;
-        return this.topicPartitions[topic][ c++ % this.topicPartitions[topic].length ];
-    }
-})();
-
 Client.prototype.refreshBrokers = function (brokerMetadata) {
     var self = this;
     this.brokerMetadata = brokerMetadata;
@@ -369,7 +373,7 @@ Client.prototype.refreshMetadata = function (topicNames, cb) {
 
 Client.prototype.send = function (payloads, encoder, decoder, cb) {
     var self = this, _payloads = payloads;
-    // payloads: [ [metadata exists], [metadta not exists] ]
+    // payloads: [ [metadata exists], [metadata not exists] ]
     payloads = this.checkMetadatas(payloads);
     if (payloads[0].length && !payloads[1].length) {
         this.sendToBroker(_.flatten(payloads), encoder, decoder, cb);
@@ -409,20 +413,20 @@ Client.prototype.sendToBroker = function (payloads, encoder, decoder, cb) {
         var correlationId = this.nextId();
         var request = encoder.call(null, this.clientId, correlationId, payloads[leader]);
         var broker = this.brokerForLeader(leader, longpolling);
-        if (broker.error || broker.closing) {
+        if (!broker || !broker.socket || broker.socket.error || broker.socket.closing) {
             return cb(new errors.BrokerNotAvailableError('Could not find the leader'), payloads[leader]);
         }
 
         if (longpolling) {
-            if (broker.waitting) continue;
-            broker.waitting = true;
+            if (broker.socket.waitting) continue;
+            broker.socket.waitting = true;
         }
 
         if (decoder.requireAcks == 0) {
-            broker.write(request);
+            broker.writeAsync(request);
             cb(null, { result: 'no ack' });
         } else {
-            this.queueCallback(broker, correlationId, [decoder, cb]);
+            this.queueCallback(broker.socket, correlationId, [decoder, cb]);
             broker.write(request);
         }
     }
@@ -430,7 +434,7 @@ Client.prototype.sendToBroker = function (payloads, encoder, decoder, cb) {
 
 Client.prototype.checkMetadatas = function (payloads) {
     if (_.isEmpty(this.topicMetadata)) return [ [],payloads ];
-    // out: [ [metadata exists], [metadta not exists] ]
+    // out: [ [metadata exists], [metadata not exists] ]
     var out = [ [], [] ];
     payloads.forEach(function (p) {
         if (this.hasMetadata(p.topic, p.partition)) out[0].push(p)
@@ -508,8 +512,14 @@ Client.prototype.createBroker = function connect(host, port, longpolling) {
     if (longpolling) socket.longpolling = true;
 
     socket.on('connect', function () {
+        var lastError = this.error;
         this.error = null;
-        self.emit('connect');
+        if (lastError) {
+            this.waitting = false;
+            self.emit('reconnect');
+        } else {
+            self.emit('connect');
+        }
     });
     socket.on('error', function (err) {
         this.error = err;
@@ -517,7 +527,7 @@ Client.prototype.createBroker = function connect(host, port, longpolling) {
     });
     socket.on('close', function (had_error) {
         self.emit('close', this);
-        if (had_error) {
+        if (had_error && this.error) {
             self.clearCallbackQueue(this, this.error);
         }
         else {
@@ -543,7 +553,7 @@ Client.prototype.createBroker = function connect(host, port, longpolling) {
             s.connect(s.port, s.host);
         }, 1000);
     }
-    return socket;
+    return new BrokerWrapper(socket, this.noAckBatchOptions);
 };
 
 Client.prototype.handleReceivedData = function (socket) {
@@ -569,29 +579,29 @@ Client.prototype.handleReceivedData = function (socket) {
         setImmediate(function () { this.handleReceivedData(socket);}.bind(this));
 };
 
-Client.prototype.queueCallback = function (broker, id, data) {
-    var brokerId = broker.socketId;
+Client.prototype.queueCallback = function (socket, id, data) {
+    var socketId = socket.socketId;
     var queue;
 
-    if (this.cbqueue.hasOwnProperty(brokerId)) {
-        queue = this.cbqueue[brokerId];
+    if (this.cbqueue.hasOwnProperty(socketId)) {
+        queue = this.cbqueue[socketId];
     }
     else {
         queue = {};
-        this.cbqueue[brokerId] = queue;
+        this.cbqueue[socketId] = queue;
     }
 
     queue[id] = data;
 };
 
-Client.prototype.unqueueCallback = function (broker, id) {
-    var brokerId = broker.socketId;
+Client.prototype.unqueueCallback = function (socket, id) {
+    var socketId = socket.socketId;
 
-    if (!this.cbqueue.hasOwnProperty(brokerId)) {
+    if (!this.cbqueue.hasOwnProperty(socketId)) {
         return null;
     }
 
-    var queue = this.cbqueue[brokerId];
+    var queue = this.cbqueue[socketId];
     if (!queue.hasOwnProperty(id)) {
         return null;
     }
@@ -601,21 +611,21 @@ Client.prototype.unqueueCallback = function (broker, id) {
     // cleanup socket queue
     delete queue[id];
     if (!Object.keys(queue).length) {
-        delete this.cbqueue[brokerId];
+        delete this.cbqueue[socketId];
     }
 
     return result;
 };
 
-Client.prototype.clearCallbackQueue = function (broker, error) {
-    var brokerId = broker.socketId;
-    var longpolling = broker.longpolling;
+Client.prototype.clearCallbackQueue = function (socket, error) {
+    var socketId = socket.socketId;
+    var longpolling = socket.longpolling;
 
-    if (!this.cbqueue.hasOwnProperty(brokerId)) {
+    if (!this.cbqueue.hasOwnProperty(socketId)) {
         return;
     }
 
-    var queue = this.cbqueue[brokerId];
+    var queue = this.cbqueue[socketId];
 
     if (!longpolling) {
         Object.keys(queue).forEach(function (key) {
@@ -624,7 +634,7 @@ Client.prototype.clearCallbackQueue = function (broker, error) {
             cb(error);
         });
     }
-    delete this.cbqueue[brokerId];
+    delete this.cbqueue[socketId];
 };
 
 module.exports = Client;
