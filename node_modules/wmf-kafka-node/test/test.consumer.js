@@ -257,6 +257,7 @@ describe('Consumer', function () {
                 autoCommit: true,
                 autoCommitMsgCount: 100,
                 autoCommitIntervalMs: 5000,
+                autoOffsetReset: -1,
                 encoding: 'utf8',
                 fetchMaxWaitMs: 100,
                 fetchMinBytes: 1,

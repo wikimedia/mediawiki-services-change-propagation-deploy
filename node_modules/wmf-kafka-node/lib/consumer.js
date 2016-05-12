@@ -5,6 +5,7 @@ var util = require('util'),
     events = require('events'),
     Client = require('./client'),
     protocol = require('./protocol'),
+    common = require('./common'),
     Offset = require('./offset'),
     errors = require('./errors'),
     debug = require('debug')('kafka-node:Consumer');
@@ -20,7 +21,14 @@ var DEFAULTS = {
     fetchMinBytes: 1,
     fetchMaxBytes: 1024 * 1024,
     fromOffset: false,
-    encoding: 'utf8'
+    encoding: 'utf8',
+    // If offset to consume from is out of range, the
+    // offset will be reset to based on this value.
+    // If -1, the offset will be reset to latest offset.
+    // If -2, the offset will be reset to earliest value.
+    // OTTO: TODO: the default SHOULD be -1, but the previous
+    // behavior was -2.  Should we leave it at -2?
+    autoOffsetReset: protocol.OFFSET_LARGEST
 };
 
 var nextId = (function () {
@@ -37,7 +45,7 @@ var Consumer = function (client, topics, options) {
 
     this.fetchCount = 0;
     this.client = client;
-    this.options = _.defaults( (options||{}), DEFAULTS );
+    this.options = _.defaults((common.validateConsumerOptions(options || {})), DEFAULTS);
     this.ready = false;
     this.paused = this.options.paused;
     this.id = nextId();
@@ -107,6 +115,11 @@ Consumer.prototype.init = function () {
     var self = this
         , topics = self.payloads.map(function (p) { return p.topic; })
 
+    // In case of offsetOutOfRange error when fetching,
+    // reset this consumer's topic-partition offset to
+    // a value based on self.options.autoOffsetReset.
+    self.on('offsetOutOfRange', self.resetOffset.bind(self));
+
     self.client.topicExists(topics, function (err) {
         if (err) {
             return self.emit('error', err);
@@ -125,6 +138,19 @@ Consumer.prototype.init = function () {
         });
     });
 };
+
+
+/**
+ * Issues an offset request and calls setOffset with the returned value.
+ * If topPar.time is not given, it will be set to the value of
+ * self.options.autoOffsetReset. topPar shoould be of the form
+ *  {
+ *      topic: 't',
+ *      partition: 0,
+ *      time: ... # optional
+ *  }
+ */
+Consumer.prototype.resetOffset = common.resetOffset;
 
 /*
  * Update offset info in current payloads
@@ -180,6 +206,10 @@ Consumer.prototype.fetch = function () {
 
 Consumer.prototype.fetchOffset = function (payloads, cb) {
     this.client.sendOffsetFetchRequest(this.options.groupId, payloads, cb);
+};
+
+Consumer.prototype.offsetRequest = function (payloads, cb) {
+    this.client.sendOffsetRequest(payloads, cb);
 };
 
 Consumer.prototype.addTopics = function (topics, cb, fromOffset) {

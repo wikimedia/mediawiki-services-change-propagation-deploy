@@ -16,7 +16,9 @@ var API_VERSION = 0,
     REPLICA_ID = -1,
     CODEC_NONE = 0,
     CODEC_GZIP = 1,
-    CODEC_SNAPPY = 2;
+    CODEC_SNAPPY = 2,
+    OFFSET_LARGEST = -1,
+    OFFSET_SMALLEST = -2;
 
 function groupByTopic(payloads) {
     return payloads.reduce(function (out, p) {
@@ -546,3 +548,5 @@ exports.decodeProduceResponse = decodeProduceResponse;
 exports.encodeOffsetRequest = encodeOffsetRequest;
 exports.decodeOffsetResponse = decodeOffsetResponse;
 exports.encodeMessageSet = encodeMessageSet;
+exports.OFFSET_LARGEST = OFFSET_LARGEST;
+exports.OFFSET_SMALLEST = OFFSET_SMALLEST;
