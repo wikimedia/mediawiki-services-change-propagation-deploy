@@ -1,5 +1,0 @@
-checks:
-  endpoints:
-    type: nrpe
-    stage: restart_service
-    command: check_endpoints_changeprop
