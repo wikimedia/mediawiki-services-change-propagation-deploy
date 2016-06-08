@@ -87,10 +87,12 @@ Client.prototype.connect = function () {
     zk.once('disconnected', function () {
         if (!zk.closed) {
             zk.close();
-            self.connect();
-            self.emit('zkReconnect');
+            setTimeout(function () {
+                self.connect();
+                self.emit('zkReconnect');
+            }, 1000);
         }
-    })
+    });
     zk.on('error', function (err) {
         self.emit('error', err);
     });
