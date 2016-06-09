@@ -257,7 +257,7 @@ HighLevelConsumer.prototype.connect = function () {
     }
 
     // Check partition ownership
-    this.checkPartitionOwnershipInterval = setInterval(function () {
+    function checkPartitionOwnership() {
         if (self.rebalancing) {
             return;
         }
@@ -295,7 +295,13 @@ HighLevelConsumer.prototype.connect = function () {
                 self._signalTopicListChange();
             }
         });
-    }, 20000);
+    }
+    this.checkPartitionOwnershipInterval = setInterval(checkPartitionOwnership, 20000);
+
+    // TEMP TEMP TEMP
+    // forced rebalance
+    this.forcedRebalanceInterval = setTimeout(rebalance,
+        Math.floor(Math.random() * 3 * 60 * 1000) + 7 * 60 * 1000);
 
     // Wait for the consumer to be ready
     this.on('registered', function () {
@@ -318,8 +324,8 @@ HighLevelConsumer.prototype.connect = function () {
 
     function attachZookeeperErrorListener() {
         self.client.zk.on('error', function (err) {
-        self.emit('error', err);
-    });
+            self.emit('error', err);
+        });
     }
 
     attachZookeeperErrorListener();
@@ -327,8 +333,18 @@ HighLevelConsumer.prototype.connect = function () {
     this.client.on('zkReconnect', function () {
         attachZookeeperErrorListener();
 
+        if(self.checkPartitionOwnershipInterval) {
+            clearInterval(self.checkPartitionOwnershipInterval);
+        }
+        if(self.forcedRebalanceInterval) {
+            clearInterval(self.forcedRebalanceInterval);
+        }
+
         self.registerConsumer(function () {
             rebalance();
+            self.checkPartitionOwnershipInterval = setInterval(checkPartitionOwnership, 20000);
+            self.forcedRebalanceInterval = setTimeout(rebalance,
+                Math.floor(Math.random() * 3 * 60 * 1000) + 7 * 60 * 1000);
         });
     });
 
@@ -703,7 +719,12 @@ HighLevelConsumer.prototype.removeTopics = function (topics, cb) {
 
 HighLevelConsumer.prototype.close = function (force, cb) {
     this.ready = false;
-    clearInterval(this.checkPartitionOwnershipInterval);
+    if(this.checkPartitionOwnershipInterval) {
+        clearInterval(this.checkPartitionOwnershipInterval);
+    }
+    if(this.forcedRebalanceInterval) {
+        clearInterval(this.forcedRebalanceInterval);
+    }
 
     if (typeof force === 'function') {
         cb = force;
