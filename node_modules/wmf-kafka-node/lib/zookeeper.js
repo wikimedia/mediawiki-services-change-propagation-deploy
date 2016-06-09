@@ -24,6 +24,9 @@ var Zookeeper = function (connectionString, options) {
     this.client.on('disconnected', function () {
         that.emit('disconnected');
     });
+    this.client.on('expired', function () {
+        that.emit('expired');
+    });
     this.client.connect();
 };
 

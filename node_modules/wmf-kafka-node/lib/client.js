@@ -83,13 +83,12 @@ Client.prototype.connect = function () {
             self.emit('brokersChanged');
         }, 3000);
     });
-    zk.once('disconnected', function () {
+    zk.once('expired', function () {
+        // We were disconnected for too long and session expired - recreate the client
         if (!zk.closed) {
             zk.close();
-            setTimeout(function () {
-                self.connect();
-                self.emit('zkReconnect');
-            }, Math.floor(Math.random() * 1000) + 1000);
+            self.connect();
+            self.emit('zkReconnect');
         }
     });
     zk.on('error', function (err) {
