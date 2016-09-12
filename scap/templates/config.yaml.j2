@@ -90,7 +90,7 @@ services:
                 options:
                   metadata_broker_list: <%= broker_list %>
                   dc_name: <%= site %>
-                  concurrency: 50
+                  concurrency: <%= concurrency %>
                   startup_delay: 60000
                   templates:
                     summary_rerender:
@@ -277,7 +277,7 @@ services:
                         body: '{{globals.message}}'
 
                     on_transclusion_update:
-                      concurrency: 150
+                      concurrency: <%= concurrency * 5 %>
                       topic: resource_change
                       match:
                         meta:
