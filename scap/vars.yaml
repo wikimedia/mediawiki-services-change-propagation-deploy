@@ -1,0 +1,19 @@
+# log-related variables
+log_name: changeprop
+logstash_host: localhost
+logstash_port: 12201
+log_file: /tmp/changeprop.log
+# metrics
+metrics_name: changeprop
+metrics_host: localhost
+metrics_port: 8252
+# service
+name: changeprop
+port: 10042
+proxy: 
+broker_list: localhost:9092
+mwapi_uri: http://localhost/w/api.php
+restbase_uri: http://localhost:7231
+ores_uri: localhost:8081
+purge_host: 127.0.0.1
+purge_port: 4827

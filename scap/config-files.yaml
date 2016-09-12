@@ -1,0 +1,5 @@
+---
+/etc/changeprop/config.yaml:
+  template: config.yaml.j2
+  erb_syntax: True
+  remote_vars: /etc/changeprop/config-vars.yaml
