@@ -89,7 +89,7 @@ services:
               - path: src/sys/kafka.js
                 options:
                   metadata_broker_list: <%= broker_list %>
-                  dc_name: <%= scope.lookupvar('::site') %>
+                  dc_name: <%= site %>
                   concurrency: 50
                   startup_delay: 60000
                   templates:

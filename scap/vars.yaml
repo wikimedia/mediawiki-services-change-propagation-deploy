@@ -10,7 +10,8 @@ metrics_port: 8252
 # service
 name: changeprop
 port: 10042
-proxy: 
+proxy:
+site: datacenter1
 broker_list: localhost:9092
 mwapi_uri: http://localhost/w/api.php
 restbase_uri: http://localhost:7231
