@@ -277,7 +277,7 @@ services:
                         body: '{{globals.message}}'
 
                     on_transclusion_update:
-                      concurrency: <%= concurrency * 7 %>
+                      concurrency: <%= concurrency * 5 %>
                       topic: change-prop.transcludes.resource-change
                       match:
                         meta:
