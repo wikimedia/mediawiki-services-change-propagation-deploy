@@ -93,45 +93,47 @@ services:
                   concurrency: <%= concurrency %>
                   startup_delay: 60000
                   templates:
-                    summary_rerender:
+                    summary_definition_rerender: &summary_definition_rerender_spec
                       topic: resource_change
-                      match:
-                        meta:
-                          uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/([^\/]+)$/'
-                        tags:
-                          - restbase
-                      match_not:
-                        meta:
-                          domain: '/wiktionary\.org$/'
-                      exec:
-                        method: get
-                        # Don't encode title since it should be already encoded
-                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri[1]}}'
-                        query:
-                          redirect: false
-                        headers:
-                          cache-control: no-cache
+                      cases:
+                        - match:
+                            meta:
+                              uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/([^\/]+)$/'
+                            tags:
+                              - restbase
+                          match_not:
+                            meta:
+                              domain: '/wiktionary\.org$/'
+                          exec:
+                            method: get
+                            # Don't encode title since it should be already encoded
+                            uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri[1]}}'
+                            query:
+                              redirect: false
+                            headers:
+                              cache-control: no-cache
+                        - match:
+                            meta:
+                              # These URIs are coming from RESTBase, so we know that article titles will be normalized
+                              # and main namespace articles will not have : (uri-encoded, so %3a or %3A)
+                              uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/((?:(?!%3a|%3A|\/).)+)$/'
+                              domain: '/^en\.wiktionary\.org$/'
+                            tags:
+                              - restbase
+                          exec:
+                            method: get
+                            # Don't encode title since it should be already encoded
+                            uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/definition/{{match.meta.uri[1]}}'
+                            query:
+                              redirect: false
+                            headers:
+                              cache-control: no-cache
 
-                    definition_rerender:
-                      topic: resource_change
-                      match:
-                        meta:
-                          # These URIs are coming from RESTBase, so we know that article titles will be normalized
-                          # and main namespace articles will not have : (uri-encoded, so %3a or %3A)
-                          uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/((?:(?!%3a|%3A|\/).)+)$/'
-                          domain: '/^en\.wiktionary\.org$/'
-                        tags:
-                          - restbase
-                      exec:
-                        method: get
-                        # Don't encode title since it should be already encoded
-                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/definition/{{match.meta.uri[1]}}'
-                        query:
-                          redirect: false
-                        headers:
-                          cache-control: no-cache
+                    summary_definition_rerender_transcludes:
+                      <<: *summary_definition_rerender_spec
+                      topic: change-prop.transcludes.resource-change
 
-                    mobile_rerender:
+                    mobile_rerender: &mobile_rerender_spec
                       topic: resource_change
                       match:
                         meta:
@@ -147,7 +149,11 @@ services:
                         headers:
                           cache-control: no-cache
 
-                    purge_varnish:
+                    mobile_rerender_transcludes:
+                      <<: *mobile_rerender_spec
+                      topic: change-prop.transcludes.resource-change
+
+                    purge_varnish: &purge_varnish_spec
                       topic: resource_change
                       match:
                         meta:
@@ -160,6 +166,10 @@ services:
                         body:
                           - meta:
                               uri: '//{{message.meta.domain}}/api/rest_v1/{{match.meta.uri.title}}'
+
+                    purge_varnish_transcludes:
+                      <<: *purge_varnish_spec
+                      topic: change-prop.transcludes.resource-change
 
                     # RESTBase update jobs
                     mw_purge:
