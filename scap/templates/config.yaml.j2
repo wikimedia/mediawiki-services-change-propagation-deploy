@@ -584,3 +584,20 @@ services:
                             cache-control: no-cache
                           query:
                             redirect: false
+
+                    # Rerender summary when pageimages page property change
+                    # This is a temporary workaround until we get a complete page properties change event.
+                    page_images:
+                      topic: resource_change
+                      match:
+                        meta:
+                          uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
+                        tags:
+                          - page_image
+                      exec:
+                        method: get
+                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri.title}}'
+                        headers:
+                          cache-control: no-cache
+                        query:
+                          redirect: false
