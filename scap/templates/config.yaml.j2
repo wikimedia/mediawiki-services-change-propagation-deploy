@@ -586,46 +586,26 @@ services:
                             redirect: false
 
                     # Rerender summary when pageimages page property change
-                    # This is a temporary workaround until we get a complete page properties change event.
                     page_images:
-                      topic: resource_change
-                      match:
-                        meta:
-                          uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
-                        tags:
-                          - page_image
-                      exec:
-                        method: get
-                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri.title}}'
-                        headers:
-                          cache-control: no-cache
-                        query:
-                          redirect: false
-                    # the rule replacing the one above, to be phased out
-                    page_images_change:
                       topic: mediawiki.page-properties-change
                       # We don't support 'OR' in the match section, so workaround it by 2 cases with identical exec
                       cases:
                         - match:
-                            meta:
-                              uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
                             added_properties:
                               page_image: '/.+/' # Regex that matches anything just to check the prop is set
                           exec:
                             method: get
-                            uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri.title}}'
+                            uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{message.page_title}'
                             headers:
                               cache-control: no-cache
                             query:
                               redirect: false
                         - match:
-                            meta:
-                              uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
                             removed_properties:
                               page_image: '/.+/' # Regex that matches anything just to check the prop is set
                           exec:
                             method: get
-                            uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri.title}}'
+                            uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{message.page_title}'
                             headers:
                               cache-control: no-cache
                             query:
