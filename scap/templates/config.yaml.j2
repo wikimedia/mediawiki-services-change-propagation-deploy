@@ -45,9 +45,9 @@ spec: &spec
                         - restbase
                     match_not:
                       - meta:
-                          domain: '/wiktionary.org$/'
+                          domain: '/wiktionary\.org$/'
                       - meta:
-                          domain: www.wikidata.org
+                          domain: /\.wikidata\.org$/
                     exec:
                       method: get
                       # Don't encode title since it should be already encoded
@@ -86,7 +86,7 @@ spec: &spec
                     - restbase
                 match_not:
                   meta:
-                    domain: www.wikidata.org
+                    domain: /\.wikidata\.org$/
                 exec:
                   method: get
                   # Don't encode title since it should be already encoded
@@ -109,7 +109,7 @@ spec: &spec
                     - restbase
                 match_not:
                   meta:
-                    domain: www.wikidata.org
+                    domain: /\.wikidata\.org$/
                 exec:
                   method: post
                   uri: '/sys/purge/'
@@ -131,7 +131,7 @@ spec: &spec
                     - purge
                 match_not:
                   meta:
-                    domain: www.wikidata.org
+                    domain: /\.wikidata\.org$/
                 exec:
                   method: get
                   uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{{match.meta.uri.title}}'
@@ -154,7 +154,7 @@ spec: &spec
                     - null_edit
                 match_not:
                   meta:
-                    domain: www.wikidata.org
+                    domain: /\.wikidata\.org$/
                 exec:
                   method: get
                   uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{{match.meta.uri.title}}'
@@ -172,7 +172,7 @@ spec: &spec
                     - 404 # Sometimes occasional 404s happen because of the mysql replication lag, so retry
                 match_not:
                   meta:
-                    domain: www.wikidata.org
+                    domain: /\.wikidata\.org$/
                 exec:
                   method: get
                   uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{message.page_title}/{{message.rev_id}}'
@@ -191,7 +191,7 @@ spec: &spec
                     - 412
                 match_not:
                   meta:
-                    domain: www.wikidata.org
+                    domain: /\.wikidata\.org$/
                 exec:
                   method: get
                   uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/revision/{{message.rev_id}}'
@@ -208,7 +208,7 @@ spec: &spec
                     - 412
                 match_not:
                   meta:
-                    domain: www.wikidata.org
+                    domain: /\.wikidata\.org$/
                 exec:
                   - method: get
                     uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/title/{message.page_title}'
@@ -241,7 +241,7 @@ spec: &spec
                 topic: mediawiki.page-undelete
                 match_not:
                   meta:
-                    domain: www.wikidata.org
+                    domain: /\.wikidata\.org$/
                 exec:
                   method: get
                   uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{message.page_title}'
@@ -254,7 +254,7 @@ spec: &spec
                 topic: mediawiki.page-move
                 match_not:
                   meta:
-                    domain: www.wikidata.org
+                    domain: /\.wikidata\.org$/
                 exec:
                   - method: get
                     uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{message.page_title}/{{message.rev_id}}'
@@ -274,7 +274,7 @@ spec: &spec
                 topic: mediawiki.revision-create
                 match_not:
                   meta:
-                    domain: www.wikidata.org
+                    domain: /\.wikidata\.org$/
                 exec:
                   method: post
                   uri: '/sys/links/transcludes/{message.page_title}'
@@ -581,7 +581,7 @@ spec: &spec
                         page_image: '/.+/' # Regex that matches anything just to check the prop is set
                     match_not:
                       meta:
-                        domain: www.wikidata.org
+                        domain: /\.wikidata\.org$/
                     exec:
                       - method: get
                         uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{message.page_title}'
@@ -600,7 +600,7 @@ spec: &spec
                         page_image: '/.+/' # Regex that matches anything just to check the prop is set
                     match_not:
                       meta:
-                        domain: www.wikidata.org
+                        domain: /\.wikidata\.org$/
                     exec:
                       - method: get
                         uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{message.page_title}'
