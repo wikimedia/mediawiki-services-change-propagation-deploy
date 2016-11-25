@@ -564,8 +564,8 @@ spec: &spec
                   uri: '/sys/links/wikidata_descriptions'
                   body: '{{globals.message}}'
 
-              wikidata_description_on_revision_visibility_change:
-                topic: mediawiki.revision-visibility-change
+              wikidata_description_on_undelete:
+                topic: mediawiki.page-undelete
                 match:
                   meta:
                     domain: www.wikidata.org
