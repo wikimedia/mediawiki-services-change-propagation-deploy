@@ -6,7 +6,14 @@ if [[ `git status --porcelain` ]]; then
   exit 1
 fi
 
-make docs
+REPO=git@github.com:Blizzard/node-rdkafka.git
+
+git remote add deploy $REPO
+
+# Get the most recent stuff if we don't have it
+git fetch deploy gh-pages || exit $?
+
+make docs || exit $?
 
 # Get package version and save to variable
 
@@ -28,7 +35,7 @@ CURRENT_BRANCH=$(git rev-parse --symbolic-full-name --abbrev-ref HEAD)
 COMMIT_MESSAGE=$(git log --pretty='format:%B' -1)
 COMMIT_AUTHOR=$(git log --pretty='format:%aN <%aE>' -1)
 
-if [[ `git checkout --quiet gh-pages` ]]; then
+if [[ `git checkout --quiet -b gh-pages deploy/gh-pages` ]]; then
   >&2 echo "Could not checkout gh-pages"
   exit 1
 fi
@@ -43,5 +50,7 @@ git add --all
 git commit --author="$COMMIT_AUTHOR" -m "Updated docs for '$COMMIT_MESSAGE'"
 
 rm -rf $TEMPDIR
+
+git push $REPO gh-pages || exit $?
 
 git checkout $CURRENT_BRANCH
