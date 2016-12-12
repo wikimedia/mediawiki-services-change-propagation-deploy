@@ -305,7 +305,7 @@ spec: &spec
                   body: '{{globals.message}}'
 
               on_transclusion_update:
-                concurrency: <%= concurrency * 4 %>
+                concurrency: <%= concurrency * 8 %>
                 topic: change-prop.transcludes.resource-change
                 cases:
                   - match:
