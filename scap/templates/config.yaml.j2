@@ -178,14 +178,17 @@ spec: &spec
                       domain: /\.wikidata\.org$/
                     page_namespace: 120
                 exec:
-                  method: get
-                  uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{message.page_title}/{{message.rev_id}}'
-                  headers:
-                    cache-control: no-cache
-                    x-restbase-parentrevision: '{{message.rev_parent_id}}'
-                    if-unmodified-since: '{{date(message.meta.dt)}}'
-                  query:
-                    redirect: false
+                  - method: get
+                    uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{message.page_title}/{{message.rev_id}}'
+                    headers:
+                      cache-control: no-cache
+                      x-restbase-parentrevision: '{{message.rev_parent_id}}'
+                      if-unmodified-since: '{{date(message.meta.dt)}}'
+                    query:
+                      redirect: false
+                  - method: post
+                    uri: '/sys/links/transcludes/{message.page_title}'
+                    body: '{{globals.message}}'
 
               revision_visibility_change:
                 topic: mediawiki.revision-visibility-change
@@ -289,20 +292,6 @@ spec: &spec
                       cache-control: no-cache
                     query:
                       redirect: false
-
-              transclusion_update:
-                topic: mediawiki.revision-create
-                match_not:
-                  - meta:
-                      domain: /\.wikidata\.org$/
-                    page_namespace: 0
-                  - meta:
-                      domain: /\.wikidata\.org$/
-                    page_namespace: 120
-                exec:
-                  method: post
-                  uri: '/sys/links/transcludes/{message.page_title}'
-                  body: '{{globals.message}}'
 
               on_transclusion_update:
                 concurrency: <%= concurrency * 8 %>
