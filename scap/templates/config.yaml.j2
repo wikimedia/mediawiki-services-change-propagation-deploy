@@ -134,7 +134,9 @@ spec: &spec
                     domain: /\.wikidata\.org$/
                 exec:
                   method: get
-                  uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{{match.meta.uri.title}}'
+                  # This even comes directly from MediaWiki, so title is encoded in MW-specific way.
+                  # Re-encode the title in standard `encodeURIComponent` encoding.
+                  uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{decode(match.meta.uri.title)}'
                   headers:
                     cache-control: no-cache
                     if-unmodified-since: '{{date(message.meta.dt)}}'
@@ -157,7 +159,9 @@ spec: &spec
                     domain: /\.wikidata\.org$/
                 exec:
                   method: get
-                  uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{{match.meta.uri.title}}'
+                  # This even comes directly from MediaWiki, so title is encoded in MW-specific way.
+                  # Re-encode the title in standard `encodeURIComponent` encoding.
+                  uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{decode(match.meta.uri.title)}'
                   headers:
                     cache-control: no-cache
                     if-unmodified-since: '{{date(message.meta.dt)}}'
