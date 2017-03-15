@@ -118,6 +118,7 @@ int main_0004_conf (int argc, char **argv) {
 		"message.max.bytes", "12345", /* int property */
 		"client.id", "my id", /* string property */
 		"debug", "topic,metadata", /* S2F property */
+		"topic.blacklist", "__.*", /* #778 */
 #if WITH_ZLIB
 		"compression.codec", "gzip", /* S2I property */
 #endif
@@ -194,10 +195,7 @@ int main_0004_conf (int argc, char **argv) {
 	 */
 
 	/* original */
-	rk = rd_kafka_new(RD_KAFKA_PRODUCER, conf,
-			  errstr, sizeof(errstr));
-	if (!rk)
-		TEST_FAIL("Failed to create rdkafka instance: %s\n", errstr);
+	rk = test_create_handle(RD_KAFKA_PRODUCER, conf);
 
 	rkt = rd_kafka_topic_new(rk, topic, tconf);
 	if (!rkt)
@@ -208,10 +206,7 @@ int main_0004_conf (int argc, char **argv) {
 	rd_kafka_destroy(rk);
 
 	/* copied */
-	rk = rd_kafka_new(RD_KAFKA_PRODUCER, conf2,
-			  errstr, sizeof(errstr));
-	if (!rk)
-		TEST_FAIL("Failed to create rdkafka instance: %s\n", errstr);
+	rk = test_create_handle(RD_KAFKA_PRODUCER, conf2);
 
 	rkt = rd_kafka_topic_new(rk, topic, tconf2);
 	if (!rkt)
@@ -279,8 +274,6 @@ int main_0004_conf (int argc, char **argv) {
 			{ "sasl.mechanisms", "PLAIN", "PLAIN", 1  },
 			{ "sasl.mechanisms", "GSSAPI,PLAIN", NULL, 1  },
 			{ "sasl.mechanisms", "", NULL, 1  },
-			{ "sasl.mechanisms", "foobar", NULL, 1  },
-			{ "sasl.mechanisms", "plain", "PLAIN", 1  },
 #endif
 			{ NULL }
 		};
