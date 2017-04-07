@@ -15,7 +15,7 @@ site: datacenter1
 broker_list: localhost:9092
 mwapi_uri: http://localhost/w/api.php
 restbase_uri: http://localhost:7231
-ores_uri: localhost:8081
+ores_uris: [ 'localhost:8081' ]
 purge_host: 127.0.0.1
 purge_port: 4827
 concurrency: 50
