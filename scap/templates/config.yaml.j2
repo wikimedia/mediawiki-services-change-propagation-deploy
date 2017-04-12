@@ -315,7 +315,7 @@ spec: &spec
               ores_cache:
                 <%- if ores_uris is not defined -%>
                   <%- set ores_uris = [ ores_uri ] -%>
-                <%- endif -%>
+                <%- endif %>
                 topic: mediawiki.revision-create
                 concurrency: 15
                 ignore:
