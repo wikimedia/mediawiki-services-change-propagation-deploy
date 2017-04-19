@@ -286,7 +286,7 @@ spec: &spec
                       redirect: false
 
               on_transclusion_update:
-                concurrency: <%= concurrency * 8 %>
+                concurrency: <%= concurrency * 4 %>
                 topic: change-prop.transcludes.resource-change
                 cases:
                   - match:
