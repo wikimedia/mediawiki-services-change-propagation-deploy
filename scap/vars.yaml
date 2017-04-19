@@ -18,4 +18,4 @@ restbase_uri: http://localhost:7231
 ores_uris: [ 'localhost:8081' ]
 purge_host: 127.0.0.1
 purge_port: 4827
-concurrency: 50
+concurrency: 30
