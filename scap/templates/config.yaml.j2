@@ -9,6 +9,19 @@ spec: &spec
               user-agent: true
   title: The Change Propagation root
   paths:
+<%- if env == 'production' %>
+    /{api:sys}/limit:
+      x-modules:
+        - path: src/sys/rate_limiter.js
+          options:
+            redis:
+              path: <%= redis_path %>
+              password: <%= redis_pass if redis_pass else '' %>
+            limiters:
+              blacklist:
+                interval: 604800
+                limit: 100
+<%- endif %>
     /{api:sys}/purge:
       x-modules:
         - path: src/sys/purge.js
@@ -158,6 +171,8 @@ spec: &spec
 
               page_edit:
                 topic: mediawiki.revision-create
+                limiters:
+                  blacklist: '{message.meta.uri}'
                 retry_on:
                   status:
                     - '5xx'
@@ -288,6 +303,8 @@ spec: &spec
               on_transclusion_update:
                 concurrency: <%= concurrency * 8 %>
                 topic: change-prop.transcludes.resource-change
+                limiters:
+                  blacklist: '{message.meta.uri}'
                 cases:
                   - match:
                       meta:
