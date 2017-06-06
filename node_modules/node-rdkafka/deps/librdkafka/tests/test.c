@@ -139,6 +139,9 @@ _TEST_DECL(0055_producer_latency);
 _TEST_DECL(0056_balanced_group_mt);
 _TEST_DECL(0057_invalid_topic);
 _TEST_DECL(0058_log);
+_TEST_DECL(0060_op_prio);
+_TEST_DECL(0061_consumer_lag);
+
 
 /**
  * Define all tests here
@@ -185,9 +188,11 @@ struct test tests[] = {
 	_TEST(0042_many_topics, 0),
 	_TEST(0043_no_connection, TEST_F_LOCAL),
 	_TEST(0044_partition_cnt, 0),
-	_TEST(0045_subscribe_update, 0),
-	_TEST(0045_subscribe_update_topic_remove, TEST_F_KNOWN_ISSUE),
-        _TEST(0045_subscribe_update_non_exist_and_partchange, 0),
+	_TEST(0045_subscribe_update, 0, TEST_BRKVER(0,9,0,0)),
+	_TEST(0045_subscribe_update_topic_remove, TEST_F_KNOWN_ISSUE,
+              TEST_BRKVER(0,9,0,0)),
+        _TEST(0045_subscribe_update_non_exist_and_partchange, 0,
+              TEST_BRKVER(0,9,0,0)),
 	_TEST(0046_rkt_cache, TEST_F_LOCAL),
 	_TEST(0047_partial_buf_tmout, TEST_F_KNOWN_ISSUE),
 	_TEST(0048_partitioner, 0),
@@ -201,8 +206,10 @@ struct test tests[] = {
         _TEST(0054_offset_time, 0, TEST_BRKVER(0,10,0,0)),
         _TEST(0055_producer_latency, TEST_F_KNOWN_ISSUE_WIN32),
         _TEST(0056_balanced_group_mt, 0, TEST_BRKVER(0,9,0,0)),
-        _TEST(0057_invalid_topic, 0),
+        _TEST(0057_invalid_topic, 0, TEST_BRKVER(0,9,0,0)),
         _TEST(0058_log, TEST_F_LOCAL),
+        _TEST(0060_op_prio, 0, TEST_BRKVER(0,9,0,0)),
+        _TEST(0061_consumer_lag, 0),
         { NULL }
 };
 
@@ -523,6 +530,7 @@ void test_conf_init (rd_kafka_conf_t **conf, rd_kafka_topic_conf_t **topic_conf,
 
         if (conf) {
                 *conf = rd_kafka_conf_new();
+                rd_kafka_conf_set(*conf, "client.id", test_curr->name, NULL, 0);
                 rd_kafka_conf_set_error_cb(*conf, test_error_cb);
                 rd_kafka_conf_set_stats_cb(*conf, test_stats_cb);
 
@@ -1258,6 +1266,7 @@ int main(int argc, char **argv) {
                                                  test->start)/
                                            1000000);
                                 test_curr = save_test;
+                                tests_running_cnt--; /* fail-later misses this*/
 #ifdef _MSC_VER
                                 TerminateThread(test->thrd, -1);
 #else
@@ -1329,17 +1338,19 @@ rd_kafka_t *test_create_handle (int mode, rd_kafka_conf_t *conf) {
 	rd_kafka_t *rk;
 	char errstr[512];
 
-	if (!conf) {
-		conf = rd_kafka_conf_new();
+        if (!conf) {
+                test_conf_init(&conf, NULL, 0);
 #if WITH_SOCKEM
                 if (*test_sockem_conf)
                         test_socket_enable(conf);
 #endif
+        } else {
+                test_conf_set(conf, "client.id", test_curr->name);
         }
 
-	test_conf_set(conf, "client.id", test_curr->name);
 
-	/* Create kafka instance */
+
+	/* Creat kafka instance */
 	rk = rd_kafka_new(mode, conf, errstr, sizeof(errstr));
 	if (!rk)
 		TEST_FAIL("Failed to create rdkafka instance: %s\n", errstr);
@@ -2908,8 +2919,8 @@ rd_kafka_resp_err_t test_auto_create_topic_rkt (rd_kafka_t *rk,
                 TEST_WARN("metadata() for %s failed: %s",
                           rkt ? rd_kafka_topic_name(rkt) : "(all-local)",
                           rd_kafka_err2str(err));
-
-	rd_kafka_metadata_destroy(metadata);
+        else
+                rd_kafka_metadata_destroy(metadata);
 
         return err;
 }
@@ -3089,4 +3100,9 @@ void test_FAIL (const char *file, int line, int fail_now, const char *str) {
 
 void test_SAY (const char *file, int line, int level, const char *str) {
         TEST_SAYL(level, "%s", str);
+}
+
+
+const char *test_curr_name (void) {
+        return test_curr->name;
 }

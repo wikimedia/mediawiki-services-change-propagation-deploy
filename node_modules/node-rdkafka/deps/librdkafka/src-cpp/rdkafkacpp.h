@@ -91,7 +91,7 @@ namespace RdKafka {
  * @remark This value should only be used during compile time,
  *         for runtime checks of version use RdKafka::version()
  */
-#define RD_KAFKA_VERSION  0x000904ff
+#define RD_KAFKA_VERSION  0x000905ff
 
 /**
  * @brief Returns the librdkafka version as integer.
@@ -732,6 +732,14 @@ class RD_EXPORT Conf {
 
   /**
    * @brief Set configuration property \p name to value \p value.
+   *
+   * Fallthrough:
+   * Topic-level configuration properties may be set using this interface
+   * in which case they are applied on the \c default_topic_conf.
+   * If no \c default_topic_conf has been set one will be created.
+   * Any sub-sequent set("default_topic_conf", ..) calls will
+   * replace the current default topic configuration.
+
    * @returns CONF_OK on success, else writes a human readable error
    *          description to \p errstr on error.
    */
@@ -796,6 +804,10 @@ class RD_EXPORT Conf {
    *
    * Do not use this method to get callbacks registered by the configuration file.
    * Instead use the specific get() methods with the specific callback parameter in the signature.
+   *
+   * Fallthrough:
+   * Topic-level configuration properties from the \c default_topic_conf
+   * may be retrieved using this interface.
    *
    *  @returns CONF_OK if the property was set previously set and
    *           returns the value in \p value. */

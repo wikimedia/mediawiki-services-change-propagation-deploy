@@ -62,9 +62,14 @@
 #if WITH_SNAPPY
 #include "snappy.h"
 #endif
-#if WITH_LZ4
+#if WITH_LZ4_EXT
 #include <lz4frame.h>
+#else
+#include "lz4frame.h"
+#endif
 #include "xxhash.h"
+#if WITH_SSL
+#include <openssl/err.h>
 #endif
 #include "rdendian.h"
 
@@ -404,8 +409,10 @@ void rd_kafka_broker_fail (rd_kafka_broker_t *rkb,
                         rd_kafka_dbg(rkb->rkb_rk, BROKER, "FAIL",
                                      "%s", rkb->rkb_err.msg);
                 else {
-                        rd_kafka_log(rkb->rkb_rk, level, "FAIL",
-                                     "%s", rkb->rkb_err.msg);
+                        /* Don't log if an error callback is registered */
+                        if (!rkb->rkb_rk->rk_conf.error_cb)
+                                rd_kafka_log(rkb->rkb_rk, level, "FAIL",
+                                             "%s", rkb->rkb_err.msg);
                         /* Send ERR op back to application for processing. */
                         rd_kafka_op_err(rkb->rkb_rk, err,
                                         "%s", rkb->rkb_err.msg);
@@ -548,11 +555,11 @@ static void rd_kafka_broker_timeout_scan (rd_kafka_broker_t *rkb, rd_ts_t now) {
 	/* Requests in retry queue */
 	retry_cnt = rd_kafka_broker_bufq_timeout_scan(
 		rkb, 0, &rkb->rkb_retrybufs, NULL,
-		RD_KAFKA_RESP_ERR__TIMED_OUT_QUEUE, now);
+		RD_KAFKA_RESP_ERR__TIMED_OUT, now);
 	/* Requests in local queue not sent yet. */
 	q_cnt = rd_kafka_broker_bufq_timeout_scan(
 		rkb, 0, &rkb->rkb_outbufs, &req_cnt,
-		RD_KAFKA_RESP_ERR__TIMED_OUT_QUEUE, now);
+		RD_KAFKA_RESP_ERR__TIMED_OUT, now);
 
 	if (req_cnt + retry_cnt + q_cnt > 0) {
 		rd_rkb_dbg(rkb, MSG|RD_KAFKA_DBG_BROKER,
@@ -572,12 +579,22 @@ static void rd_kafka_broker_timeout_scan (rd_kafka_broker_t *rkb, rd_ts_t now) {
 		      rkb->rkb_req_timeouts >=
 		      rkb->rkb_rk->rk_conf.socket_max_fails)) &&
                     rkb->rkb_state >= RD_KAFKA_BROKER_STATE_UP) {
+                        char rttinfo[32];
+                        /* Print average RTT (if avail) to help diagnose. */
+                        rd_avg_calc(&rkb->rkb_avg_rtt, now);
+                        if (rkb->rkb_avg_rtt.ra_v.avg)
+                                rd_snprintf(rttinfo, sizeof(rttinfo),
+                                            " (average rtt %.3fms)",
+                                            (float)(rkb->rkb_avg_rtt.ra_v.avg/
+                                                    1000.0f));
+                        else
+                                rttinfo[0] = 0;
                         errno = ETIMEDOUT;
                         rd_kafka_broker_fail(rkb, LOG_ERR,
                                              RD_KAFKA_RESP_ERR__MSG_TIMED_OUT,
                                              "%i request(s) timed out: "
-                                             "disconnect",
-                                             rkb->rkb_req_timeouts);
+                                             "disconnect%s",
+                                             rkb->rkb_req_timeouts, rttinfo);
                 }
         }
 }
@@ -1289,8 +1306,6 @@ static int rd_kafka_broker_connect (rd_kafka_broker_t *rkb) {
 		"broker in state %s connecting",
 		rd_kafka_broker_state_names[rkb->rkb_state]);
 
-        rkb->rkb_ts_connect = rd_clock();
-
 	if (rd_kafka_broker_resolve(rkb) == -1)
 		return -1;
 
@@ -1637,6 +1652,44 @@ void rd_kafka_broker_connect_done (rd_kafka_broker_t *rkb, const char *errstr) {
 }
 
 
+
+/**
+ * @brief Checks if the given API request+version is supported by the broker.
+ * @returns 1 if supported, else 0.
+ * @locality broker thread
+ * @locks none
+ */
+static RD_INLINE int
+rd_kafka_broker_request_supported (rd_kafka_broker_t *rkb,
+                                   rd_kafka_buf_t *rkbuf) {
+        struct rd_kafka_ApiVersion skel = {
+                .ApiKey = rkbuf->rkbuf_reqhdr.ApiKey
+        };
+        struct rd_kafka_ApiVersion *ret;
+
+        if (unlikely(rkbuf->rkbuf_reqhdr.ApiKey == RD_KAFKAP_ApiVersion))
+                return 1; /* ApiVersion requests are used to detect
+                           * the supported API versions, so should always
+                           * be allowed through. */
+
+        /* First try feature flags, if any, which may cover a larger
+         * set of APIs. */
+        if (rkbuf->rkbuf_features)
+                return (rkb->rkb_features & rkbuf->rkbuf_features) ==
+                        rkbuf->rkbuf_features;
+
+        /* Then try the ApiVersion map. */
+        ret = bsearch(&skel, rkb->rkb_ApiVersions, rkb->rkb_ApiVersions_cnt,
+                      sizeof(*rkb->rkb_ApiVersions),
+                      rd_kafka_ApiVersion_key_cmp);
+        if (!ret)
+                return 0;
+
+        return ret->MinVer <= rkbuf->rkbuf_reqhdr.ApiVersion &&
+                rkbuf->rkbuf_reqhdr.ApiVersion <= ret->MaxVer;
+}
+
+
 /**
  * Send queued messages to broker
  *
@@ -1658,9 +1711,19 @@ int rd_kafka_send (rd_kafka_broker_t *rkb) {
 		size_t of = rkbuf->rkbuf_of;
 
                 /* Check for broker support */
-                if (unlikely((rkb->rkb_features & rkbuf->rkbuf_features) !=
-                             rkbuf->rkbuf_features)) {
+                if (unlikely(!rd_kafka_broker_request_supported(rkb, rkbuf))) {
                         rd_kafka_bufq_deq(&rkb->rkb_outbufs, rkbuf);
+                        rd_rkb_dbg(rkb, BROKER | RD_KAFKA_DBG_PROTOCOL,
+                                   "UNSUPPORTED",
+                                   "Failing %sResponse "
+                                   "(v%hd, %"PRIusz" bytes, CorrId %"PRId32"): "
+                                   "request not supported by broker "
+                                   "(incorrect broker.version.fallback?)",
+                                   rd_kafka_ApiKey2str(rkbuf->rkbuf_reqhdr.
+                                                       ApiKey),
+                                   rkbuf->rkbuf_reqhdr.ApiVersion,
+                                   rkbuf->rkbuf_len,
+                                   rkbuf->rkbuf_reshdr.CorrId);
                         rd_kafka_buf_callback(
                                 rkb->rkb_rk, rkb,
                                 RD_KAFKA_RESP_ERR__UNSUPPORTED_FEATURE,
@@ -2014,7 +2077,6 @@ done:
 
 
 
-#if WITH_LZ4
 /**
  * Fix-up bad LZ4 framing caused by buggy Kafka client / broker.
  * The LZ4F framing format is described in detail here:
@@ -2399,7 +2461,6 @@ done:
         return err;
 
 }
-#endif
 
 
 /**
@@ -2418,9 +2479,7 @@ static int rd_kafka_compress_MessageSet_buf (rd_kafka_broker_t *rkb,
 	size_t coutlen = 0;
 	int    outlen;
 	int r;
-#if WITH_LZ4
 	rd_kafka_resp_err_t err;
-#endif
 #if WITH_SNAPPY
 	int    siovlen = 1;
 	struct snappy_env senv;
@@ -2563,7 +2622,6 @@ static int rd_kafka_compress_MessageSet_buf (rd_kafka_broker_t *rkb,
 		break;
 #endif
 
-#if WITH_LZ4
         case RD_KAFKA_COMPRESSION_LZ4:
 		/* Skip LZ4 compression if broker doesn't support it. */
 		if (!(rkb->rkb_features & RD_KAFKA_FEATURE_LZ4))
@@ -2580,7 +2638,6 @@ static int rd_kafka_compress_MessageSet_buf (rd_kafka_broker_t *rkb,
                 if (err)
                         return -1;
                 break;
-#endif
 
 
 	default:
@@ -3394,11 +3451,13 @@ static char *rd_kafka_snappy_java_decompress (rd_kafka_broker_t *rkb,
 
 		while (of + 4 <= (ssize_t)inlen) {
 			/* compressed length */
-			uint32_t clen = be32toh(*(uint32_t *)(inbuf+of));
+			uint32_t clen;
 			/* uncompressed length */
 			size_t ulen;
 			int r;
 
+                        memcpy(&clen, inbuf+of, 4);
+                        clen = be32toh(clen);
 			of += 4;
 
 			if (unlikely(clen > inlen - of)) {
@@ -3491,6 +3550,8 @@ static char *rd_kafka_snappy_java_decompress (rd_kafka_broker_t *rkb,
 /**
  * Parses a MessageSet and enqueues internal ops on the local
  * application queue for each Message.
+ * @remark rkq must be a temporary unforwarded queue
+ *         that requires no locking.
  */
 static rd_kafka_resp_err_t
 rd_kafka_messageset_handle (rd_kafka_broker_t *rkb,
@@ -3536,13 +3597,51 @@ rd_kafka_messageset_handle (rd_kafka_broker_t *rkb,
 		void *outbuf = NULL; /* Uncompressed output buffer. */
 		size_t hdrsize = 6; /* Header size following MessageSize */
 		int relative_offsets;
+                size_t crc_start_of;
+                int32_t crc_start_remain;
                 rd_kafka_resp_err_t err RD_UNUSED = RD_KAFKA_RESP_ERR_NO_ERROR;
 
 		rd_kafka_buf_read_i64(rkbuf, &hdr.Offset);
 		rd_kafka_buf_read_i32(rkbuf, &hdr.MessageSize);
 		rd_kafka_buf_read_i32(rkbuf, &hdr.Crc);
+                crc_start_of = rkbuf->rkbuf_of;
+                crc_start_remain = rd_kafka_buf_remain(rkbuf);
 		rd_kafka_buf_read_i8(rkbuf, &hdr.MagicByte);
 		rd_kafka_buf_read_i8(rkbuf, &hdr.Attributes);
+
+
+                if (rkb->rkb_rk->rk_conf.check_crcs &&
+                    !(hdr.Attributes & RD_KAFKA_MSG_ATTR_COMPRESSION_MASK)) {
+                        /* Verify CRC if desired.
+                         * Since compression algorithms have their own
+                         * checksums we dont bother checking CRCs of compressed
+                         * messagesets. */
+                        uint32_t calc_crc;
+
+                        if (hdr.MessageSize - 4 > crc_start_remain)
+                                goto err; /* Ignore partial messages */
+
+                        calc_crc = rd_crc32(rkbuf->rkbuf_rbuf+crc_start_of,
+                                            hdr.MessageSize-4);
+
+                        if (unlikely(hdr.Crc != calc_crc)) {
+                                rd_kafka_q_op_err(rkq, RD_KAFKA_OP_CONSUMER_ERR,
+                                                  RD_KAFKA_RESP_ERR__BAD_MSG,
+                                                  tver->version,
+                                                  rktp,
+                                                  hdr.Offset,
+                                                  "Message at offset %"PRId64
+                                                  " of %"PRId32" bytes "
+                                                  "failed CRC check "
+                                                  "(original 0x%"PRIx32" != "
+                                                  "calculated 0x%"PRIx32")",
+                                                  hdr.Offset, hdr.MessageSize,
+                                                  hdr.Crc, calc_crc);
+                                rd_kafka_buf_skip(rkbuf, hdr.MessageSize-4);
+                                continue;
+                        }
+                }
+
 
 		if (hdr.MagicByte == 1) { /* MsgVersion */
 			rd_kafka_buf_read_i64(rkbuf, &hdr.Timestamp);
@@ -3563,7 +3662,6 @@ rd_kafka_messageset_handle (rd_kafka_broker_t *rkb,
 			 */
                         goto err;
                 }
-		/* Ignore CRC (for now) */
 
 		/* Extract key */
 		rd_kafka_buf_read_bytes(rkbuf, &Key);
@@ -3752,7 +3850,6 @@ rd_kafka_messageset_handle (rd_kafka_broker_t *rkb,
 		break;
 #endif
 
-#if WITH_LZ4
                 case RD_KAFKA_COMPRESSION_LZ4:
 		{
                         err = rd_kafka_lz4_decompress(rkb,
@@ -3766,7 +3863,6 @@ rd_kafka_messageset_handle (rd_kafka_broker_t *rkb,
                                 goto per_msg_err;
                 }
                 break;
-#endif
 
 
 		default:
@@ -4533,20 +4629,19 @@ static int rd_kafka_broker_thread_main (void *arg) {
                          * thundering horde of reconnecting clients after
                          * a broker / network outage. Issue #403 */
                         if (rkb->rkb_rk->rk_conf.reconnect_jitter_ms &&
-                            rkb->rkb_ts_connect &&
-                            (backoff = rd_clock() - (
-                                    rkb->rkb_ts_connect +
-                                    (rd_jitter((int)(rkb->rkb_rk->rk_conf.
-						     reconnect_jitter_ms*0.5),
-                                               (int)(rkb->rkb_rk->rk_conf.
-						     reconnect_jitter_ms*1.5))
-                                     * 1000))) < 0) {
-				backoff = RD_MAX(-backoff / 1000, 100);
+                            (backoff =
+                             rd_interval_immediate(
+                                     &rkb->rkb_connect_intvl,
+                                     rd_jitter(rkb->rkb_rk->rk_conf.
+                                               reconnect_jitter_ms*500,
+                                               rkb->rkb_rk->rk_conf.
+                                               reconnect_jitter_ms*1500),
+                                     0)) <= 0) {
+                                backoff = -backoff/1000;
                                 rd_rkb_dbg(rkb, BROKER, "RECONNECT",
                                            "Delaying next reconnect by %dms",
                                            (int)backoff);
                                 rd_kafka_broker_ua_idle(rkb, (int)backoff);
-                                rkb->rkb_ts_connect = 0;
                                 continue;
                         }
 
@@ -4557,7 +4652,7 @@ static int rd_kafka_broker_thread_main (void *arg) {
 				 * resolving failed.
 				 * Try the next resolve result until we've
 				 * tried them all, in which case we sleep a
-				 * short while to avoid the busy looping. */
+				 * short while to avoid busy looping. */
 				if (!rkb->rkb_rsal ||
                                     rkb->rkb_rsal->rsal_cnt == 0 ||
                                     rkb->rkb_rsal->rsal_curr + 1 ==
@@ -4577,7 +4672,7 @@ static int rd_kafka_broker_thread_main (void *arg) {
 				/* Connect failure.
 				 * Try the next resolve result until we've
 				 * tried them all, in which case we sleep a
-				 * short while to avoid the busy looping. */
+				 * short while to avoid busy looping. */
 				if (!rkb->rkb_rsal ||
                                     rkb->rkb_rsal->rsal_cnt == 0 ||
                                     rkb->rkb_rsal->rsal_curr + 1 ==
@@ -4600,24 +4695,6 @@ static int rd_kafka_broker_thread_main (void *arg) {
                                 rd_kafka_broker_lock(rkb);
 				rd_kafka_broker_set_state(rkb, RD_KAFKA_BROKER_STATE_UP);
                                 rd_kafka_broker_unlock(rkb);
-                        } else if (rd_kafka_terminating(rkb->rkb_rk)) {
-				/* Connection torn down and handle is
-				 * terminating: fail the send+retry queue
-				 * to speed up termination, otherwise we'll
-				 * need to wait for request timeouts. */
-				int r;
-
-				r = rd_kafka_broker_bufq_timeout_scan(
-					rkb, 0, &rkb->rkb_outbufs, NULL,
-					RD_KAFKA_RESP_ERR__DESTROY, 0);
-				r += rd_kafka_broker_bufq_timeout_scan(
-					rkb, 0, &rkb->rkb_retrybufs, NULL,
-					RD_KAFKA_RESP_ERR__DESTROY, 0);
-				rd_rkb_dbg(rkb, BROKER, "TERMINATE",
-					   "Handle is terminating: "
-					   "failed %d request(s) in "
-					   "retry+outbuf", r);
-
 			} else {
 				/* Connection torn down, sleep a short while to
 				 * avoid busy-looping on protocol errors */
@@ -4626,6 +4703,23 @@ static int rd_kafka_broker_thread_main (void *arg) {
 			break;
 		}
 
+                if (rd_kafka_terminating(rkb->rkb_rk)) {
+                        /* Handle is terminating: fail the send+retry queue
+                         * to speed up termination, otherwise we'll
+                         * need to wait for request timeouts. */
+                        int r;
+
+                        r = rd_kafka_broker_bufq_timeout_scan(
+                                rkb, 0, &rkb->rkb_outbufs, NULL,
+                                RD_KAFKA_RESP_ERR__DESTROY, 0);
+                        r += rd_kafka_broker_bufq_timeout_scan(
+                                rkb, 0, &rkb->rkb_retrybufs, NULL,
+                                RD_KAFKA_RESP_ERR__DESTROY, 0);
+                        rd_rkb_dbg(rkb, BROKER, "TERMINATE",
+                                   "Handle is terminating: "
+                                   "failed %d request(s) in "
+                                   "retry+outbuf", r);
+                }
 	}
 
 	if (rkb->rkb_source != RD_KAFKA_INTERNAL) {
@@ -4650,7 +4744,9 @@ static int rd_kafka_broker_thread_main (void *arg) {
 void rd_kafka_broker_destroy_final (rd_kafka_broker_t *rkb) {
 
         rd_kafka_assert(rkb->rkb_rk, thrd_is_current(rkb->rkb_thread));
-	rd_kafka_assert(rkb->rkb_rk, TAILQ_EMPTY(&rkb->rkb_outbufs.rkbq_bufs));
+        rd_kafka_assert(rkb->rkb_rk, TAILQ_EMPTY(&rkb->rkb_outbufs.rkbq_bufs));
+        rd_kafka_assert(rkb->rkb_rk, TAILQ_EMPTY(&rkb->rkb_waitresps.rkbq_bufs));
+        rd_kafka_assert(rkb->rkb_rk, TAILQ_EMPTY(&rkb->rkb_retrybufs.rkbq_bufs));
 	rd_kafka_assert(rkb->rkb_rk, TAILQ_EMPTY(&rkb->rkb_toppars));
 
 #if WITH_SASL
@@ -4755,6 +4851,7 @@ rd_kafka_broker_t *rd_kafka_broker_add (rd_kafka_t *rk,
 	rd_kafka_bufq_init(&rkb->rkb_waitresps);
 	rd_kafka_bufq_init(&rkb->rkb_retrybufs);
 	rkb->rkb_ops = rd_kafka_q_new(rk);
+        rd_interval_init(&rkb->rkb_connect_intvl);
 	rd_avg_init(&rkb->rkb_avg_int_latency, RD_AVG_GAUGE);
 	rd_avg_init(&rkb->rkb_avg_rtt, RD_AVG_GAUGE);
 	rd_avg_init(&rkb->rkb_avg_throttle, RD_AVG_GAUGE);
@@ -5189,6 +5286,7 @@ const char *rd_kafka_broker_name (rd_kafka_broker_t *rkb) {
 
         return ret[reti];
 }
+
 
 void rd_kafka_brokers_init (void) {
 }

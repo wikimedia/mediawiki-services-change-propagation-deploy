@@ -31,8 +31,14 @@
 
 #include "rdkafkacpp.h"
 
-#define RD_INLINE
 extern "C" {
+#ifdef _MSC_VER
+/* Win32/Visual Studio */
+#include "../src/rdwin32.h"
+#else
+/* POSIX / UNIX based systems */
+#include "../src/rdposix.h"
+#endif
 #include "testshared.h"
 }
 

@@ -244,50 +244,6 @@ const char *test_str_id_generate_tmp (void);
 
 
 
-typedef struct test_timing_s {
-	char name[64];
-	int64_t ts_start;
-	int64_t duration;
-	int64_t ts_every; /* Last every */
-} test_timing_t;
-
-/**
- * @brief Start timing, Va-Argument is textual name (printf format)
- */
-#define TIMING_START(TIMING,...) do {                                   \
-        rd_snprintf((TIMING)->name, sizeof((TIMING)->name), __VA_ARGS__); \
-	(TIMING)->ts_start = test_clock();				\
-	(TIMING)->duration = 0;						\
-	(TIMING)->ts_every = (TIMING)->ts_start;			\
-	} while (0)
-
-#define TIMING_STOP(TIMING) do {				\
-	(TIMING)->duration = test_clock() - (TIMING)->ts_start; \
-	TEST_SAY("%s: duration %.3fms\n",				\
-		 (TIMING)->name, (float)(TIMING)->duration / 1000.0f);	\
-	} while (0)
-
-#define TIMING_DURATION(TIMING) ((TIMING)->duration ? (TIMING)->duration : \
-				 (test_clock() - (TIMING)->ts_start))
-
-/* Trigger something every US microseconds. */
-static RD_UNUSED int TIMING_EVERY (test_timing_t *timing, int us) {
-	int64_t now = test_clock();
-	if (timing->ts_every + us <= now) {
-		timing->ts_every = now;
-		return 1;
-	}
-	return 0;
-}
-
-#ifndef _MSC_VER
-#define rd_sleep(S) sleep(S)
-#else
-#define rd_sleep(S) Sleep((S)*1000)
-#endif
-
-
-
 
 void test_msg_fmt (char *dest, size_t dest_size,
 		   uint64_t testid, int32_t partition, int msgid);
@@ -454,9 +410,7 @@ void test_produce_msgs (rd_kafka_t *rk, rd_kafka_topic_t *rkt,
                         uint64_t testid, int32_t partition,
                         int msg_base, int cnt,
 			const char *payload, size_t size);
-uint64_t
-test_produce_msgs_easy (const char *topic, uint64_t testid,
-                        int32_t partition, int msgcnt);
+
 rd_kafka_t *test_create_consumer (const char *group_id,
 				  void (*rebalance_cb) (
 					  rd_kafka_t *rk,

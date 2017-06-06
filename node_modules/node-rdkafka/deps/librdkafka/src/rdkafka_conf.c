@@ -120,9 +120,7 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
 		{ 0x8, "sasl" },
 #endif
 		{ 0x10, "regex" },
-#if WITH_LZ4
 		{ 0x20, "lz4" },
-#endif
 		{ 0, NULL }
 		}
 	},
@@ -130,7 +128,7 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
 	  "Client identifier.",
 	  .sdef =  "rdkafka" },
 	{ _RK_GLOBAL, "metadata.broker.list", _RK_C_STR, _RK(brokerlist),
-	  "Initial list of brokers. "
+	  "Initial list of brokers as a CSV list of broker host or host:port. "
 	  "The application may also use `rd_kafka_brokers_add()` to add "
 	  "brokers during runtime." },
 	{ _RK_GLOBAL, "bootstrap.servers", _RK_C_ALIAS, 0,
@@ -514,7 +512,8 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
         { _RK_GLOBAL|_RK_CONSUMER, "auto.commit.interval.ms", _RK_C_INT,
 	  _RK(auto_commit_interval_ms),
 	  "The frequency in milliseconds that the consumer offsets "
-	  "are committed (written) to offset storage. (0 = disable)",
+	  "are committed (written) to offset storage. (0 = disable). "
+          "This setting is used by the high-level consumer.",
           0, 86400*1000, 5*1000 },
         { _RK_GLOBAL|_RK_CONSUMER, "enable.auto.offset.store", _RK_C_BOOL,
           _RK(enable_auto_offset_store),
@@ -587,7 +586,12 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
 	  "Emit RD_KAFKA_RESP_ERR__PARTITION_EOF event whenever the "
 	  "consumer reaches the end of a partition.",
 	  0, 1, 1 },
-
+        { _RK_GLOBAL|_RK_CONSUMER, "check.crcs", _RK_C_BOOL,
+          _RK(check_crcs),
+          "Verify CRC32 of consumed messages, ensuring no on-the-wire or "
+          "on-disk corruption to the messages occurred. This check comes "
+          "at slightly increased CPU usage.",
+          0, 1, 0 },
 	/* Global producer properties */
 	{ _RK_GLOBAL|_RK_PRODUCER, "queue.buffering.max.messages", _RK_C_INT,
 	  _RK(queue_buffering_max_msgs),
@@ -627,9 +631,7 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
 #if WITH_SNAPPY
 			{ RD_KAFKA_COMPRESSION_SNAPPY, "snappy" },
 #endif
-#if WITH_LZ4
                         { RD_KAFKA_COMPRESSION_LZ4, "lz4" },
-#endif
 			{ 0 }
 		} },
 	{ _RK_GLOBAL|_RK_PRODUCER, "batch.num.messages", _RK_C_INT,
@@ -709,10 +711,7 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
 #if WITH_SNAPPY
 		  { RD_KAFKA_COMPRESSION_SNAPPY, "snappy" },
 #endif
-#if WITH_LZ4
 		  { RD_KAFKA_COMPRESSION_LZ4, "lz4" },
-#endif
-
 		  { RD_KAFKA_COMPRESSION_INHERIT, "inherit" },
 		  { 0 }
 		} },
@@ -738,7 +737,8 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
 	{ _RK_TOPIC|_RK_CONSUMER, "auto.commit.interval.ms", _RK_C_INT,
 	  _RKT(auto_commit_interval_ms),
 	  "The frequency in milliseconds that the consumer offsets "
-	  "are committed (written) to offset storage.",
+	  "are committed (written) to offset storage. "
+          "This setting is used by the low-level legacy consumer.",
 	  10, 86400*1000, 60*1000 },
 	{ _RK_TOPIC|_RK_CONSUMER, "auto.offset.reset", _RK_C_S2I,
 	  _RKT(auto_offset_reset),
@@ -809,7 +809,7 @@ rd_kafka_anyconf_set_prop0 (int scope, void *conf,
 			    const char *istr, int ival, prop_set_mode_t set_mode,
                             char *errstr, size_t errstr_size) {
 
-#define _RK_PTR(TYPE,BASE,OFFSET)  (TYPE)(((char *)(BASE))+(OFFSET))
+#define _RK_PTR(TYPE,BASE,OFFSET)  (TYPE)(void *)(((char *)(BASE))+(OFFSET))
 	switch (prop->type)
 	{
 	case _RK_C_STR:
@@ -1216,11 +1216,26 @@ static int rd_kafka_anyconf_set (int scope, void *conf,
 
 
 rd_kafka_conf_res_t rd_kafka_conf_set (rd_kafka_conf_t *conf,
-				       const char *name,
-				       const char *value,
-				       char *errstr, size_t errstr_size) {
-	return rd_kafka_anyconf_set(_RK_GLOBAL, conf, name, value,
-				    errstr, errstr_size);
+                                       const char *name,
+                                       const char *value,
+                                       char *errstr, size_t errstr_size) {
+        rd_kafka_conf_res_t res;
+        res = rd_kafka_anyconf_set(_RK_GLOBAL, conf, name, value,
+                                   errstr, errstr_size);
+        if (res != RD_KAFKA_CONF_UNKNOWN)
+                return res;
+
+        /* Fallthru:
+         * If the global property was unknown, try setting it on the
+         * default topic config. */
+        if (!conf->topic_conf) {
+                /* Create topic config, might be over-written by application
+                 * later. */
+                conf->topic_conf = rd_kafka_topic_conf_new();
+        }
+
+        return rd_kafka_topic_conf_set(conf->topic_conf, name, value,
+                                       errstr, errstr_size);
 }
 
 
@@ -1339,7 +1354,8 @@ static void rd_kafka_anyconf_copy (int scope, void *dst, const void *src) {
 
                         if (!strcmp(prop->name, "default_topic_conf") && val)
                                 val = (void *)rd_kafka_topic_conf_dup(
-                                        (const rd_kafka_topic_conf_t *)val);
+                                        (const rd_kafka_topic_conf_t *)
+                                        (void *)val);
 			break;
                 case _RK_C_KSTR:
                 {
@@ -1736,7 +1752,15 @@ rd_kafka_conf_res_t rd_kafka_topic_conf_get (const rd_kafka_topic_conf_t *conf,
 rd_kafka_conf_res_t rd_kafka_conf_get (const rd_kafka_conf_t *conf,
                                        const char *name,
                                        char *dest, size_t *dest_size) {
-        return rd_kafka_anyconf_get(_RK_GLOBAL, conf, name, dest, dest_size);
+        rd_kafka_conf_res_t res;
+        res = rd_kafka_anyconf_get(_RK_GLOBAL, conf, name, dest, dest_size);
+        if (res != RD_KAFKA_CONF_UNKNOWN || !conf->topic_conf)
+                return res;
+
+        /* Fallthru:
+         * If the global property was unknown, try getting it from the
+         * default topic config, if any. */
+        return rd_kafka_topic_conf_get(conf->topic_conf, name, dest, dest_size);
 }
 
 
