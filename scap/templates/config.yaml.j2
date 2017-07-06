@@ -57,6 +57,8 @@ spec: &spec
             templates:
               summary_definition_rerender: &summary_definition_rerender_spec
                 topic: '/^(?:change-prop\.transcludes\.)?resource[-_]change$/'
+                limiters:
+                  blacklist: 'summary:{message.meta.uri}'
                 cases:
                   - match:
                       meta:
@@ -95,6 +97,8 @@ spec: &spec
 
               mobile_rerender: &mobile_rerender_spec
                 topic: '/^(?:change-prop\.transcludes\.)?resource[-_]change$/'
+                limiters:
+                  blacklist: 'mobile:{message.meta.uri}'
                 match:
                   meta:
                     uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/([^/]+)$/'
@@ -132,6 +136,8 @@ spec: &spec
               # RESTBase update jobs
               mw_purge:
                 topic: resource_change
+                limiters:
+                  blacklist: 'html:{message.meta.uri}'
                 match:
                   meta:
                     uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
@@ -157,6 +163,8 @@ spec: &spec
                   status:
                     - 403 # Ignoring 403 since some of the pages with high number of null_edit events are blacklisted
                     - 412
+                limiters:
+                  blacklist: 'html:{message.meta.uri}'
                 match:
                   meta:
                     uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
@@ -179,7 +187,7 @@ spec: &spec
               page_edit:
                 topic: mediawiki.revision-create
                 limiters:
-                  blacklist: '{message.meta.uri}'
+                  blacklist: 'html:{message.meta.uri}'
                 retry_on:
                   status:
                     - '5xx'
@@ -319,7 +327,7 @@ spec: &spec
                 concurrency: <%= concurrency * 8 %>
                 topic: change-prop.transcludes.resource-change
                 limiters:
-                  blacklist: '{message.meta.uri}'
+                  blacklist: 'html:{message.meta.uri}'
                 cases:
                   - match:
                       meta:
@@ -364,7 +372,7 @@ spec: &spec
               on_backlinks_update:
                 topic: change-prop.backlinks.resource-change
                 limiters:
-                  blacklist: '{message.meta.uri}'
+                  blacklist: 'html:{message.meta.uri}'
                 cases:
                   - match:
                       meta:
