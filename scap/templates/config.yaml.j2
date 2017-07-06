@@ -335,9 +335,15 @@ spec: &spec
                         x-restbase-mode: '{{message.tags[1]}}'
                       query:
                         redirect: false
+                    match_not:
+                      meta:
+                        domain: ceb.wikipedia.org
                   - match:
                       meta:
                         schema_uri: 'continue/1'
+                    match_not:
+                      meta:
+                        domain: ceb.wikipedia.org
                     exec:
                       method: post
                       uri: '/sys/links/transcludes/{message.original_event.page_title}'
