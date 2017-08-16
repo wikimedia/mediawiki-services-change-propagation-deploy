@@ -57,6 +57,11 @@ spec: &spec
           options:
             metadata_broker_list: <%= broker_list %>
             dc_name: <%= site %>
+            consumer:
+              # JobQueue jobs might sent messages larget then 1 Meg,
+              # so we increase the max message size in kafka and have to
+              # ajust the consumers accordingly.
+              fetch.message.max.bytes: <%= kafka_max_bytes %>
             concurrency: <%= concurrency %>
             startup_delay: 60000
             templates:
