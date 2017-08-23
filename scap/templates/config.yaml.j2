@@ -331,7 +331,7 @@ spec: &spec
                       redirect: false
 
               on_transclusion_update:
-                concurrency: <%= concurrency * 2 %>
+                concurrency: <%= concurrency * 4 %>
                 topic: change-prop.transcludes.resource-change
                 limiters:
                   blacklist: 'html:{message.meta.uri}'
