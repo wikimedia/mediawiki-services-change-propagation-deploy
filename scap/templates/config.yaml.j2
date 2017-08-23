@@ -102,11 +102,9 @@ spec: &spec
                 match:
                   meta:
                     uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/([^/]+)$/'
+                    domain: '/\.wikipedia\.org$/'
                   tags:
                     - restbase
-                match_not:
-                  meta:
-                    domain: /\.wikidata\.org$/
                 exec:
                   method: get
                   # Don't encode title since it should be already encoded
@@ -625,26 +623,39 @@ spec: &spec
 
               on_wikidata_description_change:
                 topic: change-prop.wikidata.resource-change
-                match:
-                  meta:
-                    uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
-                  tags: [ 'wikidata' ]
-                exec:
-                  - method: get
-                    uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri.title}}'
-                    headers:
-                      cache-control: no-cache
-                    query:
-                      redirect: false
-                  - method: get
-                    uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/mobile-sections/{{match.meta.uri.title}}'
-                    headers:
-                      cache-control: no-cache
-                    query:
-                      redirect: false
+                cases:
+                  - match:
+                      meta:
+                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
+                        domain: '/\.wikipedia\.org$/'
+                      tags: [ 'wikidata' ]
+                    exec:
+                      - method: get
+                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri.title}}'
+                        headers:
+                          cache-control: no-cache
+                        query:
+                          redirect: false
+                      - method: get
+                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/mobile-sections/{{match.meta.uri.title}}'
+                        headers:
+                          cache-control: no-cache
+                        query:
+                          redirect: false
+                  - match:
+                      meta:
+                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
+                      tags: [ 'wikidata' ]
+                    exec:
+                      - method: get
+                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri.title}}'
+                        headers:
+                          cache-control: no-cache
+                        query:
+                          redirect: false
 
               # Rerender summary when pageimages page property change
-              page_images:
+              page_images_summary:
                 topic: mediawiki.page-properties-change
                 # We don't support 'OR' in the match section, so workaround it by 2 cases with identical exec
                 cases:
@@ -659,18 +670,12 @@ spec: &spec
                           domain: /\.wikidata\.org$/
                         page_namespace: 120
                     exec:
-                      - method: get
-                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{message.page_title}'
-                        headers:
-                          cache-control: no-cache
-                        query:
-                          redirect: false
-                      - method: get
-                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/mobile-sections/{message.page_title}'
-                        headers:
-                          cache-control: no-cache
-                        query:
-                          redirect: false
+                      method: get
+                      uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{message.page_title}'
+                      headers:
+                        cache-control: no-cache
+                      query:
+                        redirect: false
                   - match:
                       removed_properties:
                         page_image: '/.+/' # Regex that matches anything just to check the prop is set
@@ -682,18 +687,41 @@ spec: &spec
                           domain: /\.wikidata\.org$/
                         page_namespace: 120
                     exec:
-                      - method: get
-                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{message.page_title}'
-                        headers:
-                          cache-control: no-cache
-                        query:
-                          redirect: false
-                      - method: get
-                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/mobile-sections/{message.page_title}'
-                        headers:
-                          cache-control: no-cache
-                        query:
-                          redirect: false
+                      method: get
+                      uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{message.page_title}'
+                      headers:
+                        cache-control: no-cache
+                      query:
+                        redirect: false
+
+              page_images_mobile:
+                topic: mediawiki.page-properties-change
+                # We don't support 'OR' in the match section, so workaround it by 2 cases with identical exec
+                cases:
+                  - match:
+                      meta:
+                        domain: '/\.wikipedia\.org$/'
+                      added_properties:
+                        page_image: '/.+/' # Regex that matches anything just to check the prop is set
+                    exec:
+                      method: get
+                      uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/mobile-sections/{message.page_title}'
+                      headers:
+                        cache-control: no-cache
+                      query:
+                        redirect: false
+                  - match:
+                      meta:
+                        domain: '/\.wikipedia\.org$/'
+                      removed_properties:
+                        page_image: '/.+/' # Regex that matches anything just to check the prop is set
+                    exec:
+                      method: get
+                      uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/mobile-sections/{message.page_title}'
+                      headers:
+                        cache-control: no-cache
+                      query:
+                        redirect: false
 
 
 # Number of worker processes to spawn.
