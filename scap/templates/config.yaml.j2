@@ -753,6 +753,8 @@ logging:
     - level: info
       path: <%= log_file %>
       type: file
+  sampled_levels:
+    trace/dedupe: 0.01
 
 # Statsd metrics reporter
 metrics:
