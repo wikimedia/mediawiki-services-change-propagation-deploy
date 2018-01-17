@@ -34,7 +34,8 @@
 
 
 /**
- * Message.Attributes
+ * @brief Message.MsgAttributes for MsgVersion v0..v1,
+ *        also used for MessageSet.Attributes for MsgVersion v2.
  */
 #define RD_KAFKA_MSG_ATTR_GZIP             (1 << 0)
 #define RD_KAFKA_MSG_ATTR_SNAPPY           (1 << 1)
@@ -43,6 +44,19 @@
 #define RD_KAFKA_MSG_ATTR_CREATE_TIME      (0 << 3)
 #define RD_KAFKA_MSG_ATTR_LOG_APPEND_TIME  (1 << 3)
 
+
+/**
+ * @brief MessageSet.Attributes for MsgVersion v2
+ *
+ * Attributes:
+ *  -------------------------------------------------------------------------------------------------
+ *  | Unused (6-15) | Control (5) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
+ *  -------------------------------------------------------------------------------------------------
+ */
+/* Compression types same as MsgVersion 0 above */
+/* Timestamp type same as MsgVersion 0 above */
+#define RD_KAFKA_MSGSET_V2_ATTR_TRANSACTIONAL (1 << 4)
+#define RD_KAFKA_MSGSET_V2_ATTR_CONTROL       (1 << 5)
 
 
 typedef struct rd_kafka_msg_s {
@@ -71,20 +85,21 @@ typedef struct rd_kafka_msg_s {
 				    * Unit is milliseconds since epoch (UTC).*/
 	rd_kafka_timestamp_type_t rkm_tstype; /* rkm_timestamp type */
 
-	union {
-		struct {
-			rd_ts_t ts_timeout;
-		} producer;
+        union {
+                struct {
+                        rd_ts_t ts_timeout; /* Message timeout */
+                        rd_ts_t ts_enq;     /* Enqueue/Produce time */
+                } producer;
 #define rkm_ts_timeout rkm_u.producer.ts_timeout
-	} rkm_u;
+#define rkm_ts_enq     rkm_u.producer.ts_enq
+        } rkm_u;
 } rd_kafka_msg_t;
 
 TAILQ_HEAD(rd_kafka_msg_head_s, rd_kafka_msg_s);
 
 
 /** @returns the absolute time a message was enqueued (producer) */
-#define rd_kafka_msg_enq_time(rkt,rkm)                                  \
-        ((rkm)->rkm_ts_timeout - ((rkt)->rkt_conf.message_timeout_ms * 1000))
+#define rd_kafka_msg_enq_time(rkm) ((rkm)->rkm_ts_enq)
 
 /**
  * @returns the message's total maximum on-wire size.
@@ -92,8 +107,14 @@ TAILQ_HEAD(rd_kafka_msg_head_s, rd_kafka_msg_s);
  *         may be smaller.
  */
 static RD_INLINE RD_UNUSED
-int32_t rd_kafka_msg_wire_size (const rd_kafka_msg_t *rkm) {
-	return (int32_t)(RD_KAFKAP_MESSAGE_OVERHEAD + rkm->rkm_len + rkm->rkm_key_len);
+size_t rd_kafka_msg_wire_size (const rd_kafka_msg_t *rkm, int MsgVersion) {
+        static const size_t overheads[] = {
+                [0] = RD_KAFKAP_MESSAGE_V0_OVERHEAD,
+                [1] = RD_KAFKAP_MESSAGE_V1_OVERHEAD,
+                [2] = RD_KAFKAP_MESSAGE_V2_OVERHEAD
+        };
+        rd_dassert(MsgVersion >= 0 && MsgVersion <= 2);
+        return overheads[MsgVersion] + rkm->rkm_len + rkm->rkm_key_len;
 }
 
 
@@ -144,13 +165,6 @@ int rd_kafka_msg_new (rd_kafka_itopic_t *rkt, int32_t force_partition,
 		      char *payload, size_t len,
 		      const void *keydata, size_t keylen,
 		      void *msg_opaque);
-rd_kafka_msg_t *rd_kafka_msg_new00 (rd_kafka_itopic_t *rkt,
-				    int32_t partition,
-				    int msgflags,
-				    char *payload, size_t len,
-				    const void *key, size_t keylen,
-				    void *msg_opaque);
-
 
 static RD_INLINE RD_UNUSED void rd_kafka_msgq_init (rd_kafka_msgq_t *rkmq) {
 	TAILQ_INIT(&rkmq->rkmq_msgs);
@@ -266,4 +280,11 @@ int rd_kafka_msgq_age_scan (rd_kafka_msgq_t *rkmq,
 
 
 int rd_kafka_msg_partitioner (rd_kafka_itopic_t *rkt, rd_kafka_msg_t *rkm,
-			      int do_lock);
+                              int do_lock);
+
+
+rd_kafka_message_t *rd_kafka_message_get (struct rd_kafka_op_s *rko);
+rd_kafka_message_t *rd_kafka_message_get_from_rkm (struct rd_kafka_op_s *rko,
+                                                   rd_kafka_msg_t *rkm);
+rd_kafka_message_t *rd_kafka_message_new (void);
+

@@ -48,13 +48,16 @@ void rd_list_grow (rd_list_t *rl, size_t size) {
                                   sizeof(*rl->rl_elems) * rl->rl_size);
 }
 
-void rd_list_init (rd_list_t *rl, int initial_size, void (*free_cb) (void *)) {
+rd_list_t *
+rd_list_init (rd_list_t *rl, int initial_size, void (*free_cb) (void *)) {
         memset(rl, 0, sizeof(*rl));
 
 	if (initial_size > 0)
 		rd_list_grow(rl, initial_size);
 
         rl->rl_free_cb = free_cb;
+
+        return rl;
 }
 
 rd_list_t *rd_list_new (int initial_size, void (*free_cb) (void *)) {
@@ -302,6 +305,9 @@ void rd_list_copy_to (rd_list_t *dst, const rd_list_t *src,
         if (!copy_cb)
                 copy_cb = rd_list_nocopy_ptr;
 
-        RD_LIST_FOREACH(elem, src, i)
-                rd_list_add(dst, copy_cb(elem, opaque));
+        RD_LIST_FOREACH(elem, src, i) {
+                void *celem = copy_cb(elem, opaque);
+                if (celem)
+                        rd_list_add(dst, celem);
+        }
 }

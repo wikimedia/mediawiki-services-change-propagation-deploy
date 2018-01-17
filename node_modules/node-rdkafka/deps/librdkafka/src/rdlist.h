@@ -47,14 +47,20 @@ typedef struct rd_list_s {
 				   * When this flag is set bsearch() is used
 				   * by find(), otherwise a linear search. */
 #define RD_LIST_F_FIXED_SIZE 0x4  /* Assert on grow */
+#define RD_LIST_F_UNIQUE     0x8  /* Don't allow duplicates:
+                                   * ONLY ENFORCED BY CALLER. */
 } rd_list_t;
 
 
 /**
- * Initialize a list, preallocate space for 'initial_size' elements (optional).
- * List elements will optionally be freed by \p free_cb.
+ * @brief Initialize a list, preallocate space for 'initial_size' elements
+ *       (optional).
+ *       List elements will optionally be freed by \p free_cb.
+ *
+ * @returns \p rl
  */
-void rd_list_init (rd_list_t *rl, int initial_size, void (*free_cb) (void *));
+rd_list_t *
+rd_list_init (rd_list_t *rl, int initial_size, void (*free_cb) (void *));
 
 
 /**
@@ -217,6 +223,9 @@ rd_list_t *rd_list_copy (const rd_list_t *src,
 
 /**
  * @brief Copy list \p src to \p dst using optional \p copy_cb (per elem)
+ * @remark The destination list is not initialized or copied by this function.
+ * @remark copy_cb() may return NULL in which case no element is added,
+ *                   but the copy callback might have done so itself.
  */
 void rd_list_copy_to (rd_list_t *dst, const rd_list_t *src,
                       void *(*copy_cb) (const void *elem, void *opaque),

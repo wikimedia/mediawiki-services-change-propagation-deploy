@@ -33,6 +33,7 @@ class LibrdkafkaTestApp(App):
         security_protocol='PLAINTEXT'
 
         f, self.test_conf_file = self.open_file('test.conf', 'perm')
+        f.write('broker.address.family=v4\n'.encode('ascii'))
         f.write(('test.sql.command=sqlite3 rdktests\n').encode('ascii'))
         f.write(('\n'.join(conf_blob)).encode('ascii'))
 
@@ -45,7 +46,7 @@ class LibrdkafkaTestApp(App):
         mech = self.conf.get('sasl_mechanisms', '').split(',')[0]
         if mech != '':
             conf_blob.append('sasl.mechanisms=%s' % mech)
-            if mech == 'PLAIN':
+            if mech == 'PLAIN' or mech.find('SCRAM-') != -1:
                 security_protocol='SASL_PLAINTEXT'
                 # Use first user as SASL user/pass
                 for up in self.conf.get('sasl_users', '').split(','):

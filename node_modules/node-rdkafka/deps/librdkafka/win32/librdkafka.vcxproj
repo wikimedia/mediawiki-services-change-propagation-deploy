@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Label="Globals">
     <ProjectGuid>{4BEBB59C-477B-4F7A-8AE8-4228D0861E54}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
@@ -92,9 +92,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\src\crc32c.h" />
     <ClInclude Include="..\src\queue.h" />
     <ClInclude Include="..\src\rdatomic.h" />
     <ClInclude Include="..\src\rdavg.h" />
+    <ClInclude Include="..\src\rdbuf.h" />
     <ClInclude Include="..\src\rdendian.h" />
     <ClInclude Include="..\src\rdgz.h" />
     <ClInclude Include="..\src\rdinterval.h" />
@@ -104,6 +106,8 @@
     <ClInclude Include="..\src\rdkafka_conf.h" />
     <ClInclude Include="..\src\rdkafka_event.h" />
     <ClInclude Include="..\src\rdkafka_feature.h" />
+    <ClInclude Include="..\src\rdkafka_lz4.h" />
+    <ClInclude Include="..\src\rdkafka_msgset.h" />
     <ClInclude Include="..\src\rdkafka_op.h" />
     <ClInclude Include="..\src\rdkafka_partition.h" />
     <ClInclude Include="..\src\rdkafka_pattern.h" />
@@ -128,12 +132,17 @@
     <ClInclude Include="..\src\rdkafka_topic.h" />
     <ClInclude Include="..\src\rdkafka_transport.h" />
     <ClInclude Include="..\src\rdkafka_metadata.h" />
+    <ClInclude Include="..\src\rdkafka_interceptor.h" />
+    <ClInclude Include="..\src\rdkafka_plugin.h" />
     <ClInclude Include="..\src\rdlog.h" />
+    <ClInclude Include="..\src\rdstring.h" />
     <ClInclude Include="..\src\rdrand.h" />
     <ClInclude Include="..\src\rdsysqueue.h" />
     <ClInclude Include="..\src\rdtime.h" />
     <ClInclude Include="..\src\rdtypes.h" />
     <ClInclude Include="..\src\rdregex.h" />
+    <ClInclude Include="..\src\rdunittest.h" />
+    <ClInclude Include="..\src\rdvarint.h" />
     <ClInclude Include="..\src\snappy.h" />
     <ClInclude Include="..\src\snappy_compat.h" />
     <ClInclude Include="..\src\tinycthread.h" />
@@ -142,9 +151,12 @@
     <ClInclude Include="..\src\regexp.h" />
     <ClInclude Include="..\src\rdavl.h" />
     <ClInclude Include="..\src\rdports.h" />
+    <ClInclude Include="..\src\rddl.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\crc32c.c" />
     <ClCompile Include="..\src\rdaddr.c" />
+    <ClCompile Include="..\src\rdbuf.c" />
     <ClCompile Include="..\src\rdcrc32.c" />
     <ClCompile Include="..\src\rdgz.c" />
     <ClCompile Include="..\src\rdkafka.c" />
@@ -153,7 +165,10 @@
     <ClCompile Include="..\src\rdkafka_cgrp.c" />
     <ClCompile Include="..\src\rdkafka_conf.c" />
     <ClCompile Include="..\src\rdkafka_event.c" />
+    <ClCompile Include="..\src\rdkafka_lz4.c" />
     <ClCompile Include="..\src\rdkafka_msg.c" />
+    <ClCompile Include="..\src\rdkafka_msgset_reader.c" />
+    <ClCompile Include="..\src\rdkafka_msgset_writer.c" />
     <ClCompile Include="..\src\rdkafka_offset.c" />
     <ClCompile Include="..\src\rdkafka_op.c" />
     <ClCompile Include="..\src\rdkafka_partition.c" />
@@ -164,6 +179,8 @@
     <ClCompile Include="..\src\rdkafka_request.c" />
     <ClCompile Include="..\src\rdkafka_sasl.c" />
     <ClCompile Include="..\src\rdkafka_sasl_win32.c" />
+    <ClCompile Include="..\src\rdkafka_sasl_plain.c" />
+    <ClCompile Include="..\src\rdkafka_sasl_scram.c" />
     <ClCompile Include="..\src\rdkafka_subscription.c" />
     <ClCompile Include="..\src\rdkafka_timer.c" />
     <ClCompile Include="..\src\rdkafka_topic.c" />
@@ -172,11 +189,15 @@
     <ClCompile Include="..\src\rdkafka_feature.c" />
     <ClCompile Include="..\src\rdkafka_metadata.c" />
     <ClCompile Include="..\src\rdkafka_metadata_cache.c" />
+    <ClCompile Include="..\src\rdkafka_interceptor.c" />
+    <ClCompile Include="..\src\rdkafka_plugin.c" />
     <ClCompile Include="..\src\rdlist.c" />
     <ClCompile Include="..\src\rdlog.c" />
     <ClCompile Include="..\src\rdstring.c" />
     <ClCompile Include="..\src\rdrand.c" />
     <ClCompile Include="..\src\rdregex.c" />
+    <ClCompile Include="..\src\rdunittest.c" />
+    <ClCompile Include="..\src\rdvarint.c" />
     <ClCompile Include="..\src\snappy.c" />
     <ClCompile Include="..\src\tinycthread.c" />
     <ClCompile Include="..\src\regexp.c" />
@@ -186,6 +207,7 @@
     <ClCompile Include="..\src\lz4.c" />
     <ClCompile Include="..\src\lz4frame.c" />
     <ClCompile Include="..\src\lz4hc.c" />
+    <ClCompile Include="..\src\rddl.c" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="..\LICENSE..txt" />

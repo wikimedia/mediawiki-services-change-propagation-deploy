@@ -200,6 +200,10 @@ class MessageImpl : public Message {
 
   void               *msg_opaque () const { return rkmessage_->_private; };
 
+  int64_t             latency () const {
+          return rd_kafka_message_latency(rkmessage_);
+  }
+
   RdKafka::Topic *topic_;
   const rd_kafka_message_t *rkmessage_;
   bool free_rkmessage_;
@@ -585,6 +589,18 @@ class HandleImpl : virtual public Handle {
 
   ErrorCode set_log_queue (Queue *queue);
 
+  void yield () {
+    rd_kafka_yield(rk_);
+  }
+
+  const std::string clusterid (int timeout_ms) {
+          char *str = rd_kafka_clusterid(rk_, timeout_ms);
+          std::string clusterid = str ? str : "";
+          if (str)
+                  rd_kafka_mem_free(rk_, str);
+          return clusterid;
+  }
+
   rd_kafka_t *rk_;
   /* All Producer and Consumer callbacks must reside in HandleImpl and
    * the opaque provided to rdkafka must be a pointer to HandleImpl, since
@@ -754,6 +770,19 @@ public:
   ErrorCode position (std::vector<TopicPartition*> &partitions);
 
   ErrorCode close ();
+
+  ErrorCode seek (const TopicPartition &partition, int timeout_ms);
+
+  ErrorCode offsets_store (std::vector<TopicPartition*> &offsets) {
+          rd_kafka_topic_partition_list_t *c_parts =
+                  partitions_to_c_parts(offsets);
+          rd_kafka_resp_err_t err =
+                  rd_kafka_offsets_store(rk_, c_parts);
+          update_partitions_from_c_parts(offsets, c_parts);
+          rd_kafka_topic_partition_list_destroy(c_parts);
+          return static_cast<ErrorCode>(err);
+  }
+
 };
 
 

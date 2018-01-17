@@ -490,7 +490,7 @@ rd_kafka_commit_queue (rd_kafka_t *rk,
 	if (!rkqu) {
                 rd_kafka_op_t *rko =
                         rd_kafka_q_pop_serve(rkq, RD_POLL_INFINITE,
-                                             0, _Q_CB_FORCE_RETURN,
+                                             0, RD_KAFKA_Q_CB_FORCE_RETURN,
                                              NULL, NULL);
 		if (!rko)
 			err = RD_KAFKA_RESP_ERR__TIMED_OUT;
@@ -691,6 +691,36 @@ rd_kafka_resp_err_t rd_kafka_offset_store (rd_kafka_topic_t *app_rkt,
 }
 
 
+rd_kafka_resp_err_t
+rd_kafka_offsets_store (rd_kafka_t *rk,
+                        rd_kafka_topic_partition_list_t *offsets) {
+        int i;
+        int ok_cnt = 0;
+
+        for (i = 0 ; i < offsets->cnt ; i++) {
+                rd_kafka_topic_partition_t *rktpar = &offsets->elems[i];
+                shptr_rd_kafka_toppar_t *s_rktp;
+
+                s_rktp = rd_kafka_topic_partition_get_toppar(rk, rktpar);
+                if (!s_rktp) {
+                        rktpar->err = RD_KAFKA_RESP_ERR__UNKNOWN_PARTITION;
+                        continue;
+                }
+
+                rd_kafka_offset_store0(rd_kafka_toppar_s2i(s_rktp),
+                                       rktpar->offset, 1/*lock*/);
+                rd_kafka_toppar_destroy(s_rktp);
+
+                rktpar->err = RD_KAFKA_RESP_ERR_NO_ERROR;
+                ok_cnt++;
+        }
+
+        return offsets->cnt > 0 && ok_cnt < offsets->cnt ?
+                RD_KAFKA_RESP_ERR__UNKNOWN_PARTITION :
+                RD_KAFKA_RESP_ERR_NO_ERROR;
+}
+
+
 
 
 
@@ -718,7 +748,9 @@ static rd_kafka_resp_err_t rd_kafka_offset_file_term (rd_kafka_toppar_t *rktp) {
         return err;
 }
 
-static void rd_kafka_offset_reset_op_cb (rd_kafka_t *rk, rd_kafka_op_t *rko) {
+static rd_kafka_op_res_t
+rd_kafka_offset_reset_op_cb (rd_kafka_t *rk, rd_kafka_q_t *rkq,
+                             rd_kafka_op_t *rko) {
 	rd_kafka_toppar_t *rktp =
 		rd_kafka_toppar_s2i(rko->rko_rktp);
 	rd_kafka_toppar_lock(rktp);
@@ -726,6 +758,7 @@ static void rd_kafka_offset_reset_op_cb (rd_kafka_t *rk, rd_kafka_op_t *rko) {
                               rko->rko_u.offset_reset.offset,
                               rko->rko_err, rko->rko_u.offset_reset.reason);
 	rd_kafka_toppar_unlock(rktp);
+        return RD_KAFKA_OP_RES_HANDLED;
 }
 
 /**
@@ -860,14 +893,13 @@ static void rd_kafka_offset_file_init (rd_kafka_toppar_t *rktp) {
                 char escfile[4096];
 
                 /* Include group.id in filename if configured. */
-                if (!RD_KAFKAP_STR_IS_NULL(rktp->rktp_rkt->rkt_rk->
-                                           rk_conf.group_id))
+                if (!RD_KAFKAP_STR_IS_NULL(rktp->rktp_rkt->rkt_rk->rk_group_id))
                         rd_snprintf(tmpfile, sizeof(tmpfile),
                                  "%s-%"PRId32"-%.*s.offset",
                                  rktp->rktp_rkt->rkt_topic->str,
                                  rktp->rktp_partition,
                                  RD_KAFKAP_STR_PR(rktp->rktp_rkt->rkt_rk->
-                                                  rk_conf.group_id));
+                                                  rk_group_id));
                 else
                         rd_snprintf(tmpfile, sizeof(tmpfile),
                                  "%s-%"PRId32".offset",

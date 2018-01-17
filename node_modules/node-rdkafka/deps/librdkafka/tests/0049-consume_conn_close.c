@@ -64,9 +64,12 @@ static int connect_cb (struct test *test, sockem_t *skm, const char *id) {
 static int is_fatal_cb (rd_kafka_t *rk, rd_kafka_resp_err_t err,
                         const char *reason) {
         /* Ignore connectivity errors since we'll be bringing down
-         * .. connectivity. */
+         * .. connectivity.
+         * SASL auther will think a connection-down even in the auth
+         * state means the broker doesn't support SASL PLAIN. */
         if (err == RD_KAFKA_RESP_ERR__TRANSPORT ||
-            err == RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN)
+            err == RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN ||
+            err == RD_KAFKA_RESP_ERR__AUTHENTICATION)
                 return 0;
         return 1;
 }
@@ -82,6 +85,12 @@ int main_0049_consume_conn_close (int argc, char **argv) {
         rd_kafka_topic_conf_t *tconf;
         rd_kafka_topic_partition_list_t *assignment;
         rd_kafka_resp_err_t err;
+
+        if (!test_conf_match(NULL, "sasl.mechanisms", "GSSAPI")) {
+                TEST_SKIP("KNOWN ISSUE: ApiVersionRequest+SaslHandshake "
+                          "will not play well with sudden disconnects\n");
+                return 0;
+        }
 
         test_conf_init(&conf, &tconf, 60);
         /* Want an even number so it is divisable by two without surprises */

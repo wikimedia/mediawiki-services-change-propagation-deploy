@@ -31,7 +31,12 @@
 
 /**
  * Verify message timestamp behaviour on supporting brokers (>=0.10.0.0).
- * Issue #858 
+ * Issue #858
+ *
+ * FIXME: Intermittent failures:
+ *  "consume.easy: consumer_poll() timeout (1/-1 eof, 0/20 msgs)"
+ * are due to the really old timestamps being used (my_timestamp, 1234)
+ * causing the offset retention cleaner on the broker to kick in.
  */
 struct timestamp_range {
         int64_t min;
@@ -130,6 +135,15 @@ static void test_timestamps (const char *broker_tstype,
         const int msgcnt = 20;
         uint64_t testid = test_id_generate();
 
+        if ((!strncmp(broker_version, "0.9", 3) ||
+             !strncmp(broker_version, "0.8", 3)) &&
+            !test_conf_match(NULL, "sasl.mechanisms", "GSSAPI")) {
+                TEST_SAY(_C_YEL "Skipping %s, %s test: "
+                         "SaslHandshake not supported by broker v%s" _C_CLR "\n",
+                         broker_tstype, codec, broker_version);
+                return;
+        }
+
         TEST_SAY(_C_MAG "Timestamp test using %s\n", topic);
         test_timeout_set(30);
 
@@ -158,7 +172,8 @@ int main_0052_msg_timestamps (int argc, char **argv) {
 
         /* Broker version limits the producer's feature set,
          * for 0.9.0.0 no timestamp will be transmitted,
-         * but for 0.10.1.0 the producer will set the timestamp.
+         * but for 0.10.1.0 (or newer, api.version.request will be true)
+         * the producer will set the timestamp.
          * In all cases we want a reasonable timestamp back.
          *
          * Explicit broker LogAppendTime setting will overwrite
@@ -169,16 +184,16 @@ int main_0052_msg_timestamps (int argc, char **argv) {
          *
          * Any other option should honour the producer create timestamps.
          */
+        test_timestamps("CreateTime",    "0.10.1.0", "none", &my_timestamp);
+        test_timestamps("LogAppendTime", "0.10.1.0", "none", &broker_timestamp);
+        test_timestamps("CreateTime",    "0.9.0.0",  "none", &invalid_timestamp);
+        test_timestamps("LogAppendTime", "0.9.0.0",  "none", &broker_timestamp);
 #if WITH_ZLIB
         test_timestamps("CreateTime",    "0.10.1.0", "gzip", &my_timestamp);
         test_timestamps("LogAppendTime", "0.10.1.0", "gzip", &broker_timestamp);
         test_timestamps("CreateTime",    "0.9.0.0",  "gzip", &invalid_timestamp);
         test_timestamps("LogAppendTime", "0.9.0.0",  "gzip", &broker_timestamp);
 #endif
-        test_timestamps("CreateTime",    "0.10.1.0", "none", &my_timestamp);
-        test_timestamps("LogAppendTime", "0.10.1.0", "none", &broker_timestamp);
-        test_timestamps("CreateTime",    "0.9.0.0",  "none", &invalid_timestamp);
-        test_timestamps("LogAppendTime", "0.9.0.0",  "none", &broker_timestamp);
 
         return 0;
 }
