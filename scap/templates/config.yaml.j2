@@ -466,6 +466,7 @@ spec: &spec
                   performer:
                     user_is_bot: false
                 exec:
+                  method: post
                   uri: <%= ores_uri %>/v3/precache
                   body: '{{globals.message}}'
                   headers:
