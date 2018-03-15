@@ -98,7 +98,7 @@ rd_kafka_msg_t *rd_kafka_msg_new00 (rd_kafka_itopic_t *rkt,
 	rkm->rkm_rkmessage.rkt = rd_kafka_topic_keep_a(rkt);
 
 	rkm->rkm_partition  = partition;
-        rkm->rkm_offset     = 0;
+        rkm->rkm_offset     = RD_KAFKA_OFFSET_INVALID;
 	rkm->rkm_timestamp  = 0;
 	rkm->rkm_tstype     = RD_KAFKA_TIMESTAMP_NOT_AVAILABLE;
 
@@ -344,8 +344,10 @@ rd_kafka_resp_err_t rd_kafka_producev (rd_kafka_t *rk, ...) {
                                         &err, NULL,
                                         rkm->rkm_timestamp, rd_clock());
 
-        if (unlikely(err))
+        if (unlikely(err)) {
+                rd_kafka_topic_destroy0(s_rkt);
                 return err;
+        }
 
         /* Partition the message */
         err = rd_kafka_msg_partitioner(rkt, rkm, 1);

@@ -421,18 +421,18 @@ rd_kafka_commit (rd_kafka_t *rk,
         if (!(rkcg = rd_kafka_cgrp_get(rk)))
                 return RD_KAFKA_RESP_ERR__UNKNOWN_GROUP;
 
-        if (!async)
+        if (!async) {
                 repq = rd_kafka_q_new(rk);
+                rq = RD_KAFKA_REPLYQ(repq, 0);
+        }
 
-        if (!async) 
-		rq = RD_KAFKA_REPLYQ(repq, 0);
- 
         err = rd_kafka_commit0(rk, offsets, NULL, rq, NULL, NULL, "manual");
 
-        if (!err && !async) {
-		err = rd_kafka_q_wait_result(repq, RD_POLL_INFINITE);
-		rd_kafka_q_destroy(repq);
-        }
+        if (!err && !async)
+                err = rd_kafka_q_wait_result(repq, RD_POLL_INFINITE);
+
+        if (!async)
+                rd_kafka_q_destroy_owner(repq);
 
 	return err;
 }
@@ -503,7 +503,10 @@ rd_kafka_commit_queue (rd_kafka_t *rk,
                         rd_kafka_op_destroy(rko);
                 }
 
-                rd_kafka_q_destroy(rkq);
+                if (rkqu)
+                        rd_kafka_q_destroy(rkq);
+                else
+                        rd_kafka_q_destroy_owner(rkq);
 	}
 
 	return err;
@@ -697,6 +700,9 @@ rd_kafka_offsets_store (rd_kafka_t *rk,
         int i;
         int ok_cnt = 0;
 
+        if (rk->rk_conf.enable_auto_offset_store)
+                return RD_KAFKA_RESP_ERR__INVALID_ARG;
+
         for (i = 0 ; i < offsets->cnt ; i++) {
                 rd_kafka_topic_partition_t *rktpar = &offsets->elems[i];
                 shptr_rd_kafka_toppar_t *s_rktp;
@@ -715,7 +721,7 @@ rd_kafka_offsets_store (rd_kafka_t *rk,
                 ok_cnt++;
         }
 
-        return offsets->cnt > 0 && ok_cnt < offsets->cnt ?
+        return offsets->cnt > 0 && ok_cnt == 0 ?
                 RD_KAFKA_RESP_ERR__UNKNOWN_PARTITION :
                 RD_KAFKA_RESP_ERR_NO_ERROR;
 }

@@ -267,8 +267,8 @@ void rd_kafka_toppar_destroy_final (rd_kafka_toppar_t *rktp) {
 			rd_kafka_msgq_len(&rktp->rktp_xmit_msgq) == 0);
 	rd_kafka_dr_msgq(rktp->rktp_rkt, &rktp->rktp_msgq,
 			 RD_KAFKA_RESP_ERR__DESTROY);
-	rd_kafka_q_destroy(rktp->rktp_fetchq);
-        rd_kafka_q_destroy(rktp->rktp_ops);
+	rd_kafka_q_destroy_owner(rktp->rktp_fetchq);
+        rd_kafka_q_destroy_owner(rktp->rktp_ops);
 
 	rd_kafka_replyq_destroy(&rktp->rktp_replyq);
 
@@ -2996,16 +2996,16 @@ rd_kafka_topic_partition_list_query_leaders (
                 } else {
                         /* Wait for broker ids to be updated from
                          * metadata refresh above. */
-                        int wait_ms = rd_timeout_remains(ts_end);
-                        if (query_intvl < wait_ms)
-                                wait_ms = query_intvl;
-                        rd_kafka_metadata_cache_wait_change(rk, query_intvl);
+                        int wait_ms = rd_timeout_remains_limit(ts_end,
+                                                               query_intvl);
+                        rd_kafka_metadata_cache_wait_change(rk, wait_ms);
                 }
 
                 rd_list_destroy(&query_topics);
 
                 i++;
-        } while (now < ts_end); /* now is deliberately outdated here
+        } while (ts_end == RD_POLL_INFINITE ||
+                 now < ts_end); /* now is deliberately outdated here
                                  * since wait_change() will block.
                                  * This gives us one more chance to spin thru*/
 

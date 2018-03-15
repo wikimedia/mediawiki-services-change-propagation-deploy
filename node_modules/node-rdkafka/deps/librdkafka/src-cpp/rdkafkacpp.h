@@ -91,7 +91,7 @@ namespace RdKafka {
  * @remark This value should only be used during compile time,
  *         for runtime checks of version use RdKafka::version()
  */
-#define RD_KAFKA_VERSION  0x000b01ff
+#define RD_KAFKA_VERSION  0x000b03ff
 
 /**
  * @brief Returns the librdkafka version as integer.
@@ -236,7 +236,9 @@ enum ErrorCode {
         ERR__KEY_DESERIALIZATION = -160,
         /** Value deserialization error */
         ERR__VALUE_DESERIALIZATION = -159,
-	/** End internal error codes */
+        /** Partial response */
+        ERR__PARTIAL = -158,
+        /** End internal error codes */
 	ERR__END = -100,
 
 	/* Kafka broker errors: */
@@ -1429,6 +1431,23 @@ class RD_EXPORT Queue {
   virtual int poll (int timeout_ms) = 0;
 
   virtual ~Queue () = 0;
+
+  /**
+   * @brief Enable IO event triggering for queue.
+   *
+   * To ease integration with IO based polling loops this API
+   * allows an application to create a separate file-descriptor
+   * that librdkafka will write \p payload (of size \p size) to
+   * whenever a new element is enqueued on a previously empty queue.
+   *
+   * To remove event triggering call with \p fd = -1.
+   *
+   * librdkafka will maintain a copy of the \p payload.
+   *
+   * @remark When using forwarded queues the IO event must only be enabled
+   *         on the final forwarded-to (destination) queue.
+   */
+  virtual void io_event_enable (int fd, const void *payload, size_t size) = 0;
 };
 
 /**@}*/
@@ -1701,7 +1720,10 @@ public:
    *
    * @remark \c enable.auto.offset.store must be set to \c false when using this API.
    *
-   * @returns RdKafka::ERR_NO_ERROR on success or an error code on error.
+   * @returns RdKafka::ERR_NO_ERROR on success, or
+   *          RdKafka::ERR___UNKNOWN_PARTITION if none of the offsets could
+   *          be stored, or
+   *          RdKafka::ERR___INVALID_ARG if \c enable.auto.offset.store is true.
    */
   virtual ErrorCode offsets_store (std::vector<TopicPartition*> &offsets) = 0;
 };
@@ -1983,7 +2005,7 @@ class RD_EXPORT Producer : public virtual Handle {
    *
    *  NOTE: RK_MSG_FREE and RK_MSG_COPY are mutually exclusive.
    *
-   *  If the function returns -1 and RK_MSG_FREE was specified, then
+   *  If the function returns an error code and RK_MSG_FREE was specified, then
    *  the memory associated with the payload is still the caller's
    *  responsibility.
    *
@@ -1998,8 +2020,10 @@ class RD_EXPORT Producer : public virtual Handle {
    * referencing this message.
    *
    * @returns an ErrorCode to indicate success or failure:
-   *  - ERR__QUEUE_FULL - maximum number of outstanding messages has been
-   *                      reached: \c queue.buffering.max.message
+   *  - ERR_NO_ERROR           - message successfully enqueued for transmission.
+   *
+   *  - ERR__QUEUE_FULL        - maximum number of outstanding messages has been
+   *                             reached: \c queue.buffering.max.message
    *
    *  - ERR_MSG_SIZE_TOO_LARGE - message is larger than configured max size:
    *                            \c messages.max.bytes

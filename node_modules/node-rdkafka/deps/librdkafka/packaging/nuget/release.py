@@ -25,6 +25,7 @@ if __name__ == '__main__':
     parser.add_argument("--directory", help="Download directory (default: dl-<tag>)", default=None)
     parser.add_argument("--no-cleanup", help="Don't clean up temporary folders", action="store_true")
     parser.add_argument("--sha", help="Also match on this git sha1", default=None)
+    parser.add_argument("--nuget-version", help="The nuget package version (defaults to same as tag)", default=None)
     parser.add_argument("tag", help="Git tag to collect")
 
     args = parser.parse_args()
@@ -54,38 +55,29 @@ if __name__ == '__main__':
         print(' %s' % a.lpath)
     print('')
 
-    package_for = [packaging.NugetPackage]
-    packages = list()
+    package_version = match['tag']
+    if args.nuget_version is not None:
+        package_version = args.nuget_version
 
-    print('Packaging classes: %s' % package_for)
-
-    for pcl in package_for:
-        p = pcl(match['tag'], arts)
-        packages.append(p)
     print('')
 
     if dry_run:
         sys.exit(0)
 
-    # Build packages
     print('Building packages:')
-    pkgfiles = []
-    for p in packages:
-        paths = p.build(buildtype='release')
-        for path in paths:
-            # Verify package files
-            if p.verify(path):
-                pkgfiles.append(path)
-        if not args.no_cleanup:
-            p.cleanup()
-        else:
-            print(' --no-cleanup: leaving %s' % p.stpath)
+
+    p = packaging.NugetPackage(package_version, arts)
+    pkgfile = p.build(buildtype='release')
+
+    if not args.no_cleanup:
+        p.cleanup()
+    else:
+        print(' --no-cleanup: leaving %s' % p.stpath)
+
     print('')
 
-    if len(pkgfiles) > 0:
-        print('Created packages:')
-        for pkg in pkgfiles:
-            print(pkg)
-    else:
-        print('No packages created')
+    if not p.verify(pkgfile):
+        print('Package failed verification.')
         sys.exit(1)
+    else:
+        print('Created package: %s' % pkgfile)

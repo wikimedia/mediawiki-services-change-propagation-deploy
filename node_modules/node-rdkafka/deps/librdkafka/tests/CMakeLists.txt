@@ -64,6 +64,7 @@ set(
     0068-produce_timeout.c
     0069-consumer_add_parts.c
     0070-null_empty.cpp
+    0074-producev.c
     8000-idle.cpp
     test.c
     testcpp.cpp
@@ -76,3 +77,8 @@ target_link_libraries(rdkafka_test PUBLIC rdkafka++)
 add_test(NAME RdKafkaTestInParallel COMMAND rdkafka_test -p5)
 add_test(NAME RdKafkaTestSequentially COMMAND rdkafka_test -p1)
 add_test(NAME RdKafkaTestBrokerLess COMMAND rdkafka_test -p5 -l)
+
+if(NOT WIN32 AND NOT APPLE)
+  set(tests_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  add_subdirectory(interceptor_test)
+endif()

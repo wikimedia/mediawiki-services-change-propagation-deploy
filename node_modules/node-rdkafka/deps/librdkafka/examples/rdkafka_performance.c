@@ -1166,8 +1166,9 @@ int main (int argc, char **argv) {
 			RD_KAFKA_PARTITION_UA;
 
                 if (latency_mode) {
-                        msgsize = (int)(strlen("LATENCY:") +
-                                strlen("18446744073709551615 ")+1);
+                        int minlen = (int)(strlen("LATENCY:") +
+                                           strlen("18446744073709551615 ")+1);
+                        msgsize = RD_MAX(minlen, msgsize);
                         sendflags |= RD_KAFKA_MSG_F_COPY;
 		} else if (do_seq) {
                         int minlen = (int)strlen("18446744073709551615 ")+1;
@@ -1303,11 +1304,17 @@ int main (int argc, char **argv) {
 			cnt.bytes += msgsize;
 
                         if (rate_sleep) {
+				if (rate_sleep > 100) {
 #ifdef _MSC_VER
-                                Sleep(rate_sleep / 1000);
+					Sleep(rate_sleep / 1000);
 #else
-                                usleep(rate_sleep);
+					usleep(rate_sleep);
 #endif
+				} else {
+					rd_ts_t next = rd_clock() + rate_sleep;
+					while (next > rd_clock())
+						;
+				}
                         }
 
 			/* Must poll to handle delivery reports */

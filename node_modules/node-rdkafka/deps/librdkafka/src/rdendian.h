@@ -36,6 +36,7 @@
  *   htobe32()
  *   be16toh()
  *   htobe16()
+ *   le64toh()
  */
 
 #ifdef __FreeBSD__
@@ -49,10 +50,12 @@
    #define be16toh(x) (x)
    #define be32toh(x) (x)
    #define be64toh(x) (x)
+   #define le64toh(x) __bswap_64 (x)
   #else
    #define be16toh(x) __bswap_16 (x)
    #define be32toh(x) __bswap_32 (x)
    #define be64toh(x) __bswap_64 (x)
+   #define le64toh(x) (x)
   #endif
  #endif
 
@@ -90,20 +93,22 @@
 #endif /* sun */
 
 #elif defined __APPLE__
-  #include <sys/_endian.h>
+  #include <machine/endian.h>
   #include <libkern/OSByteOrder.h>
-  #define __bswap_64(x)      OSSwapInt64(x)
-  #define __bswap_32(x)      OSSwapInt32(x)
-  #define __bswap_16(x)      OSSwapInt16(x)
-
 #if __DARWIN_BYTE_ORDER == __DARWIN_BIG_ENDIAN
 #define be64toh(x) (x)
 #define be32toh(x) (x)
 #define be16toh(x) (x)
+#define le16toh(x) OSSwapInt16(x)
+#define le32toh(x) OSSwapInt32(x)
+#define le64toh(x) OSSwapInt64(x)
 #else
 #define be64toh(x) OSSwapInt64(x)
 #define be32toh(x) OSSwapInt32(x)
 #define be16toh(x) OSSwapInt16(x)
+#define le16toh(x) (x)
+#define le32toh(x) (x)
+#define le64toh(x) (x)
 #endif
 
 #elif defined(_MSC_VER)
@@ -112,6 +117,9 @@
 #define be64toh(x) _byteswap_uint64(x)
 #define be32toh(x) _byteswap_ulong(x)
 #define be16toh(x) _byteswap_ushort(x)
+#define le16toh(x) (x)
+#define le32toh(x) (x)
+#define le64toh(x) (x)
 
 #elif defined _AIX      /* AIX is always big endian */
 #define be64toh(x) (x)

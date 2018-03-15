@@ -379,6 +379,8 @@ static const struct rd_kafka_err_desc rd_kafka_err_descs[] = {
                   "Local: Key deserialization error"),
         _ERR_DESC(RD_KAFKA_RESP_ERR__VALUE_DESERIALIZATION,
                   "Local: Value deserialization error"),
+        _ERR_DESC(RD_KAFKA_RESP_ERR__PARTIAL,
+                  "Local: Partial response"),
 
 	_ERR_DESC(RD_KAFKA_RESP_ERR_UNKNOWN,
 		  "Unknown broker error"),
@@ -612,8 +614,8 @@ void rd_kafka_destroy_final (rd_kafka_t *rk) {
         }
 
 	/* Purge op-queues */
-	rd_kafka_q_destroy(rk->rk_rep);
-	rd_kafka_q_destroy(rk->rk_ops);
+	rd_kafka_q_destroy_owner(rk->rk_rep);
+	rd_kafka_q_destroy_owner(rk->rk_ops);
 
 #if WITH_SSL
 	if (rk->rk_conf.ssl.ctx) {
@@ -627,7 +629,7 @@ void rd_kafka_destroy_final (rd_kafka_t *rk) {
                      "Termination done: freeing resources");
 
         if (rk->rk_logq) {
-                rd_kafka_q_destroy(rk->rk_logq);
+                rd_kafka_q_destroy_owner(rk->rk_logq);
                 rk->rk_logq = NULL;
         }
 
@@ -1694,7 +1696,7 @@ static RD_UNUSED int rd_kafka_consume_stop0 (rd_kafka_toppar_t *rktp) {
 
         /* Synchronisation: Wait for stop reply from broker thread */
         err = rd_kafka_q_wait_result(tmpq, RD_POLL_INFINITE);
-        rd_kafka_q_destroy(tmpq);
+        rd_kafka_q_destroy_owner(tmpq);
 
 	rd_kafka_set_last_error(err, err ? EINVAL : 0);
 
@@ -1762,7 +1764,7 @@ rd_kafka_resp_err_t rd_kafka_seek (rd_kafka_topic_t *app_rkt,
         if ((err = rd_kafka_toppar_op_seek(rktp, offset,
 					   RD_KAFKA_REPLYQ(tmpq, 0)))) {
                 if (tmpq)
-                        rd_kafka_q_destroy(tmpq);
+                        rd_kafka_q_destroy_owner(tmpq);
                 rd_kafka_toppar_destroy(s_rktp);
                 return err;
         }
@@ -1771,7 +1773,7 @@ rd_kafka_resp_err_t rd_kafka_seek (rd_kafka_topic_t *app_rkt,
 
         if (tmpq) {
                 err = rd_kafka_q_wait_result(tmpq, timeout_ms);
-                rd_kafka_q_destroy(tmpq);
+                rd_kafka_q_destroy_owner(tmpq);
                 return err;
         }
 
@@ -2092,9 +2094,10 @@ rd_kafka_resp_err_t rd_kafka_consumer_close (rd_kafka_t *rk) {
                 /* Ignore YIELD, we need to finish */
         }
 
-        rd_kafka_q_destroy(rkq);
+        rd_kafka_q_fwd_set(rkcg->rkcg_q, NULL);
 
-	rd_kafka_q_fwd_set(rkcg->rkcg_q, NULL);
+        rd_kafka_q_destroy_owner(rkq);
+
 
         return err;
 }
@@ -2161,7 +2164,7 @@ rd_kafka_committed (rd_kafka_t *rk,
         } while (err == RD_KAFKA_RESP_ERR__TRANSPORT ||
 		 err == RD_KAFKA_RESP_ERR__WAIT_COORD);
 
-        rd_kafka_q_destroy(rkq);
+        rd_kafka_q_destroy_owner(rkq);
 
         return err;
 }
@@ -2218,9 +2221,17 @@ static void rd_kafka_query_wmark_offsets_resp_cb (rd_kafka_t *rk,
 						  rd_kafka_buf_t *rkbuf,
 						  rd_kafka_buf_t *request,
 						  void *opaque) {
-	struct _query_wmark_offsets_state *state = opaque;
+	struct _query_wmark_offsets_state *state;
         rd_kafka_topic_partition_list_t *offsets;
         rd_kafka_topic_partition_t *rktpar;
+
+        if (err == RD_KAFKA_RESP_ERR__DESTROY) {
+                /* 'state' has gone out of scope when query_watermark..()
+                 * timed out and returned to the caller. */
+                return;
+        }
+
+        state = opaque;
 
         offsets = rd_kafka_topic_partition_list_new(1);
         err = rd_kafka_handle_Offset(rk, rkb, err, rkbuf, request, offsets);
@@ -2331,7 +2342,7 @@ rd_kafka_query_watermark_offsets (rd_kafka_t *rk, const char *topic,
                RD_KAFKA_OP_RES_YIELD)
                 ;
 
-        rd_kafka_q_destroy(rkq);
+        rd_kafka_q_destroy_owner(rkq);
 
         if (state.err)
                 return state.err;
@@ -2398,7 +2409,15 @@ static void rd_kafka_get_offsets_for_times_resp_cb (rd_kafka_t *rk,
                                                   rd_kafka_buf_t *rkbuf,
                                                   rd_kafka_buf_t *request,
                                                   void *opaque) {
-        struct _get_offsets_for_times *state = opaque;
+        struct _get_offsets_for_times *state;
+
+        if (err == RD_KAFKA_RESP_ERR__DESTROY) {
+                /* 'state' has gone out of scope when offsets_for_times()
+                 * timed out and returned to the caller. */
+                return;
+        }
+
+        state = opaque;
 
         err = rd_kafka_handle_Offset(rk, rkb, err, rkbuf, request,
                                      state->results);
@@ -2438,6 +2457,7 @@ rd_kafka_offsets_for_times (rd_kafka_t *rk,
         int i;
         rd_kafka_resp_err_t err;
         struct rd_kafka_partition_leader *leader;
+        int tmout;
 
         if (offsets->cnt == 0)
                 return RD_KAFKA_RESP_ERR__INVALID_ARG;
@@ -2470,12 +2490,15 @@ rd_kafka_offsets_for_times (rd_kafka_t *rk,
         rd_list_destroy(&leaders);
 
         /* Wait for reply (or timeout) */
-        while (state.wait_reply > 0 && rd_timeout_remains(ts_end) > 0)
-                rd_kafka_q_serve(rkq, rd_timeout_remains(ts_end),
-                                0, RD_KAFKA_Q_CB_CALLBACK,
+        while (state.wait_reply > 0 &&
+               !rd_timeout_expired((tmout = rd_timeout_remains(ts_end))))
+                rd_kafka_q_serve(rkq, tmout, 0, RD_KAFKA_Q_CB_CALLBACK,
                                  rd_kafka_poll_cb, NULL);
 
-        rd_kafka_q_destroy(rkq);
+        rd_kafka_q_destroy_owner(rkq);
+
+        if (state.wait_reply > 0 && !state.err)
+                state.err = RD_KAFKA_RESP_ERR__TIMED_OUT;
 
         /* Then update the queried partitions. */
         if (!state.err)
@@ -2899,11 +2922,10 @@ char *rd_kafka_clusterid (rd_kafka_t *rk, int timeout_ms) {
                 /* Wait for up to timeout_ms for a metadata refresh,
                  * if permitted by application. */
                 remains_ms = rd_timeout_remains(abs_timeout);
-                if (remains_ms <= 0)
+                if (rd_timeout_expired(remains_ms))
                         return NULL;
 
-                rd_kafka_metadata_cache_wait_change(
-                        rk, rd_timeout_remains(abs_timeout));
+                rd_kafka_metadata_cache_wait_change(rk, remains_ms);
         }
 
         return NULL;
@@ -3037,10 +3059,17 @@ static void rd_kafka_DescribeGroups_resp_cb (rd_kafka_t *rk,
                                              rd_kafka_buf_t *reply,
                                              rd_kafka_buf_t *request,
                                              void *opaque) {
-        struct list_groups_state *state = opaque;
+        struct list_groups_state *state;
         const int log_decode_errors = LOG_ERR;
         int cnt;
 
+        if (err == RD_KAFKA_RESP_ERR__DESTROY) {
+                /* 'state' has gone out of scope due to list_groups()
+                 * timing out and returning. */
+                return;
+        }
+
+        state = opaque;
         state->wait_cnt--;
 
         if (err)
@@ -3150,11 +3179,20 @@ static void rd_kafka_ListGroups_resp_cb (rd_kafka_t *rk,
                                          rd_kafka_buf_t *reply,
                                          rd_kafka_buf_t *request,
                                          void *opaque) {
-        struct list_groups_state *state = opaque;
+        struct list_groups_state *state;
         const int log_decode_errors = LOG_ERR;
         int16_t ErrorCode;
         char **grps;
         int cnt, grpcnt, i = 0;
+
+        if (err == RD_KAFKA_RESP_ERR__DESTROY) {
+                /* 'state' is no longer in scope because
+                 * list_groups() timed out and returned to the caller.
+                 * We must not touch anything here but simply return. */
+                return;
+        }
+
+        state = opaque;
 
         state->wait_cnt--;
 
@@ -3276,15 +3314,28 @@ rd_kafka_list_groups (rd_kafka_t *rk, const char *group,
                 state.err = RD_KAFKA_RESP_ERR__TRANSPORT;
 
         } else {
-                while (state.wait_cnt > 0) {
-                        rd_kafka_q_serve(state.q, 100, 0,
+                int remains;
+
+                while (state.wait_cnt > 0 &&
+                       !rd_timeout_expired((remains =
+                                            rd_timeout_remains(ts_end)))) {
+                        rd_kafka_q_serve(state.q, remains, 0,
                                          RD_KAFKA_Q_CB_CALLBACK,
                                          rd_kafka_poll_cb, NULL);
                         /* Ignore yields */
                 }
         }
 
-        rd_kafka_q_destroy(state.q);
+        rd_kafka_q_destroy_owner(state.q);
+
+        if (state.wait_cnt > 0 && !state.err) {
+                if (state.grplist->group_cnt == 0)
+                        state.err = RD_KAFKA_RESP_ERR__TIMED_OUT;
+                else {
+                        *grplistp = state.grplist;
+                        return RD_KAFKA_RESP_ERR__PARTIAL;
+                }
+        }
 
         if (state.err)
                 rd_kafka_group_list_destroy(state.grplist);

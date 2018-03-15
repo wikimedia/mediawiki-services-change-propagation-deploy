@@ -236,8 +236,13 @@ int16_t rd_kafka_broker_ApiVersion_supported (rd_kafka_broker_t *rkb,
 
 
 /**
- * Locks: rd_kafka_broker_lock() MUST be held.
- * Locality: broker thread
+ * @brief Set broker state.
+ *
+ *        \c rkb->rkb_state is the previous state, while
+ *        \p state is the new state.
+ *
+ * @locks rd_kafka_broker_lock() MUST be held.
+ * @locality broker thread
  */
 void rd_kafka_broker_set_state (rd_kafka_broker_t *rkb, int state) {
 	if ((int)rkb->rkb_state == state)
@@ -270,7 +275,7 @@ void rd_kafka_broker_set_state (rd_kafka_broker_t *rkb, int state) {
                                                         rk_broker_cnt));
 		rkb->rkb_down_reported = 1;
 
-	} else if (rkb->rkb_state >= RD_KAFKA_BROKER_STATE_UP &&
+        } else if (state >= RD_KAFKA_BROKER_STATE_UP &&
 		   rkb->rkb_down_reported) {
 		rd_atomic32_sub(&rkb->rkb_rk->rk_broker_down_cnt, 1);
 		rkb->rkb_down_reported = 0;
@@ -337,6 +342,15 @@ void rd_kafka_broker_fail (rd_kafka_broker_t *rkb,
 		rd_kafka_buf_destroy(rkb->rkb_recv_buf);
 		rkb->rkb_recv_buf = NULL;
 	}
+
+        /* Reset max blocking time back to the default to avoid busy-looping
+         * on reconnect if blocking=0 (#1397).
+         * But honour the lower on-termination blocking time. */
+        if (rd_kafka_terminating(rkb->rkb_rk))
+                rkb->rkb_blocking_max_ms = 1;
+        else
+                rkb->rkb_blocking_max_ms =
+                        rkb->rkb_rk->rk_conf.socket_blocking_max_ms;
 
 	rd_kafka_broker_lock(rkb);
 
@@ -592,8 +606,8 @@ static int rd_kafka_broker_resolve (rd_kafka_broker_t *rkb) {
 	const char *errstr;
 
 	if (rkb->rkb_rsal &&
-	    rkb->rkb_t_rsal_last + rkb->rkb_rk->rk_conf.broker_addr_ttl <
-	    time(NULL)) { // FIXME: rd_clock()
+	    rkb->rkb_ts_rsal_last + (rkb->rkb_rk->rk_conf.broker_addr_ttl*1000)
+	    < rd_clock()) {
 		/* Address list has expired. */
 		rd_sockaddr_list_destroy(rkb->rkb_rsal);
 		rkb->rkb_rsal = NULL;
@@ -601,7 +615,6 @@ static int rd_kafka_broker_resolve (rd_kafka_broker_t *rkb) {
 
 	if (!rkb->rkb_rsal) {
 		/* Resolve */
-
 		rkb->rkb_rsal = rd_getaddrinfo(rkb->rkb_nodename,
 					       RD_KAFKA_PORT_STR,
 					       AI_ADDRCONFIG,
@@ -619,7 +632,9 @@ static int rd_kafka_broker_resolve (rd_kafka_broker_t *rkb) {
                                              "Failed to resolve '%s': %s",
                                              rkb->rkb_nodename, errstr);
 			return -1;
-		}
+                } else {
+                        rkb->rkb_ts_rsal_last = rd_clock();
+                }
 	}
 
 	return 0;
@@ -2271,14 +2286,16 @@ static void rd_kafka_broker_ua_idle (rd_kafka_broker_t *rkb, int timeout_ms) {
          * in state ..BROKER_STATE_CONNECT we only run this loop
          * as long as the state remains the same as the initial, on a state
          * change - most likely to UP, a correct serve() function
-         * should be used instead. */
-        while (!rd_kafka_broker_terminating(rkb) &&
-               (int)rkb->rkb_state == initial_state &&
-               !rd_timeout_expired(rd_timeout_remains(abs_timeout))) {
-
+         * should be used instead.
+         * Regardless of constraints (terminating, timeouts), poll at
+         * least once. The state will not have changed on the first iteration.
+         */
+        do {
                 rd_kafka_broker_toppars_serve(rkb);
                 rd_kafka_broker_serve(rkb, abs_timeout);
-        }
+        } while (!rd_kafka_broker_terminating(rkb) &&
+                 (int)rkb->rkb_state == initial_state &&
+                 !rd_timeout_expired(rd_timeout_remains(abs_timeout)));
 }
 
 
@@ -2769,6 +2786,10 @@ static void rd_kafka_broker_fetch_reply (rd_kafka_t *rk,
 					 rd_kafka_buf_t *reply,
 					 rd_kafka_buf_t *request,
 					 void *opaque) {
+
+        if (err == RD_KAFKA_RESP_ERR__DESTROY)
+                return; /* Terminating */
+
 	rd_kafka_assert(rkb->rkb_rk, rkb->rkb_fetching > 0);
 	rkb->rkb_fetching = 0;
 
@@ -3244,9 +3265,9 @@ void rd_kafka_broker_destroy_final (rd_kafka_broker_t *rkb) {
         rd_free(rkb->rkb_origname);
 
 	rd_kafka_q_purge(rkb->rkb_ops);
-	rd_kafka_q_destroy(rkb->rkb_ops);
+        rd_kafka_q_destroy_owner(rkb->rkb_ops);
 
-	    rd_avg_destroy(&rkb->rkb_avg_int_latency);
+        rd_avg_destroy(&rkb->rkb_avg_int_latency);
         rd_avg_destroy(&rkb->rkb_avg_rtt);
 	rd_avg_destroy(&rkb->rkb_avg_throttle);
 

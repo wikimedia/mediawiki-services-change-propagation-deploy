@@ -56,6 +56,8 @@ int          test_broker_version;
 static const char *test_broker_version_str = "0.9.0.0";
 int          test_flags = 0;
 int          test_neg_flags = TEST_F_KNOWN_ISSUE;
+/* run delete-test-topics.sh between each test (when concurrent_max = 1) */
+static int   test_delete_topics_between = 0;
 static const char *test_git_version = "HEAD";
 static const char *test_sockem_conf = "";
 
@@ -153,6 +155,7 @@ _TEST_DECL(0067_empty_topic);
 _TEST_DECL(0068_produce_timeout);
 _TEST_DECL(0069_consumer_add_parts);
 _TEST_DECL(0070_null_empty);
+_TEST_DECL(0074_producev);
 
 
 /* Manual tests */
@@ -242,6 +245,7 @@ struct test tests[] = {
         _TEST(0069_consumer_add_parts, TEST_F_KNOWN_ISSUE_WIN32,
               TEST_BRKVER(0,9,0,0)),
         _TEST(0070_null_empty, 0),
+        _TEST(0074_producev, TEST_F_LOCAL),
 
         /* Manual tests */
         _TEST(8000_idle, TEST_F_MANUAL),
@@ -840,6 +844,15 @@ static int run_test0 (struct run_args *run_args) {
                 }
         }
 
+#ifndef _MSC_VER
+        if (test_delete_topics_between && test_concurrent_max == 1) {
+                if (system("./delete-test-topics.sh $ZK_ADDRESS "
+                           "$KAFKA_PATH/bin/kafka-topics.sh") != 0) {
+                        /* ignore failures but avoid unused-result warning */
+                }
+        }
+#endif
+
 	return r;
 }
 
@@ -1229,6 +1242,10 @@ int main(int argc, char **argv) {
  			test_broker_version_str = argv[++i];
 		else if (!strcmp(argv[i], "-S"))
 			show_summary = 0;
+#ifndef _MSC_VER
+                else if (!strcmp(argv[i], "-D"))
+                        test_delete_topics_between = 1;
+#endif
 		else if (*argv[i] != '-')
                         tests_to_run = argv[i];
                 else {
@@ -1242,6 +1259,9 @@ int main(int argc, char **argv) {
                                "  -a     Assert on failures\n"
 			       "  -S     Dont show test summary\n"
 			       "  -V <N.N.N.N> Broker version.\n"
+#ifndef _MSC_VER
+                               "  -D     Run delete-test-topics.sh between each test (requires -p1)\n"
+#endif
 			       "\n"
 			       "Environment variables:\n"
 			       "  TESTS - substring matched test to run (e.g., 0033)\n"
@@ -1263,10 +1283,11 @@ int main(int argc, char **argv) {
 	if (!strcmp(test_broker_version_str, "trunk"))
 		test_broker_version_str = "0.10.0.0"; /* for now */
 
-	if (sscanf(test_broker_version_str, "%d.%d.%d.%d",
-		   &a, &b, &c, &d) != 4) {
+        d = 0;
+        if (sscanf(test_broker_version_str, "%d.%d.%d.%d",
+		   &a, &b, &c, &d) < 3) {
 		printf("%% Expected broker version to be in format "
-		       "N.N.N.N (N=int), not %s\n",
+		       "N.N.N (N=int), not %s\n",
 		       test_broker_version_str);
 		exit(1);
 	}
