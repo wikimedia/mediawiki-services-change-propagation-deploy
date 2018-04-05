@@ -66,7 +66,7 @@ spec: &spec
             startup_delay: 60000
             templates:
               summary_definition_rerender: &summary_definition_rerender_spec
-                topic: '/^(?:change-prop\.transcludes\.)?resource[-_]change$/'
+                topic: 'resource_change'
                 limiters:
                   blacklist: 'summary:{message.meta.uri}'
                 cases:
@@ -105,8 +105,12 @@ spec: &spec
                       headers:
                         cache-control: no-cache
 
+              summary_definition_rerender_transcludes: &summary_definition_rerender_transcludes_spec
+                <<: *summary_definition_rerender_spec
+                topic: 'change-prop.transcludes.resource-change'
+
               mobile_rerender: &mobile_rerender_spec
-                topic: '/^(?:change-prop\.transcludes\.)?resource[-_]change$/'
+                topic: 'resource_change'
                 limiters:
                   blacklist: 'mobile:{message.meta.uri}'
                 match:
@@ -134,8 +138,12 @@ spec: &spec
                       - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/references/{{match.meta.uri[1]}}'
 
+              mobile_rerender_transcludes: &mobile_rerender_transcludes_spec
+                <<: *mobile_rerender_spec
+                topic: 'change-prop.transcludes.resource-change'
+
               purge_varnish: &purge_varnish_spec
-                topic: '/^(?:change-prop\.transcludes\.)?resource[-_]change$/'
+                topic: 'resource_change'
                 match:
                   meta:
                     uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/(?<title>.+)$/'
@@ -150,6 +158,10 @@ spec: &spec
                   body:
                     - meta:
                         uri: '//{{message.meta.domain}}/api/rest_v1/{{match.meta.uri.title}}'
+
+              purge_varnish_transcludes: &purge_varnish_transcludes_spec
+                <<: *purge_varnish_spec
+                topic: 'change-prop.transcludes.resource-change'
 
               # RESTBase update jobs
               mw_purge:
