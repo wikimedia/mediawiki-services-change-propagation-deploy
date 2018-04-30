@@ -490,9 +490,6 @@ spec: &spec
                 ignore:
                   status:
                     - 503
-                match:
-                  performer:
-                    user_is_bot: false
                 exec:
                   method: post
                   uri: <%= ores_uri %>/v3/precache
