@@ -62,6 +62,8 @@ spec: &spec
               # so we increase the max message size in kafka and have to
               # ajust the consumers accordingly.
               fetch.message.max.bytes: <%= kafka_max_bytes %>
+            producer:
+              compression.codec: <%= kafka_compression_codec %>
             concurrency: <%= concurrency %>
             startup_delay: 60000
             templates:
