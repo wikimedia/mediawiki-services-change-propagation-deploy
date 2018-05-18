@@ -24,3 +24,4 @@ redis_pass:
 env: production
 kafka_max_bytes: 4194304
 kafka_compression_codec: snappy
+eventbus_uri: 'localhost:8085'

@@ -51,6 +51,15 @@ spec: &spec
                   host: '{{message.meta.domain}}'
                 body:
                   formatversion: 2
+    /sys/ores:
+      x-modules:
+        - path: sys/ores_updates.js
+          options:
+            ores_precache_uris:
+<%- for ores_uri in ores_uris %>
+              - <%= ores_uri %>
+<%- endfor -%>
+            eventbus_uri: <%= eventbus_uri %>
     /{api:sys}/queue:
       x-modules:
         - path: src/sys/kafka.js
@@ -482,23 +491,18 @@ spec: &spec
 
 
               # ORES caching updates
-              <%- if ores_uris is not defined -%>
-                <%- set ores_uris = [ ores_uri ] -%>
-              <%- endif %>
-              <%- for ores_uri in ores_uris %>
-              ores_cache_<%= loop.index %>:
+              ores_cache:
                 topic: mediawiki.revision-create
-                concurrency: 15
+                concurrency: 25
                 ignore:
                   status:
                     - 503
                 exec:
                   method: post
-                  uri: <%= ores_uri %>/v3/precache
+                  uri: '/sys/ores/'
+                  query:
+                    postevent: true
                   body: '{{globals.message}}'
-                  headers:
-                    content-type: application/json
-              <%- endfor %>
 
               wikidata_description_on_edit:
                 topic: mediawiki.revision-create
