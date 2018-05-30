@@ -53,12 +53,12 @@ spec: &spec
                   formatversion: 2
     /sys/ores:
       x-modules:
-        - path: sys/ores_updates.js
+        - path: src/sys/ores_updates.js
           options:
             ores_precache_uris:
 <%- for ores_uri in ores_uris %>
               - <%= ores_uri %>
-<%- endfor -%>
+<%- endfor  %>
             eventbus_uri: <%= eventbus_uri %>
     /{api:sys}/queue:
       x-modules:
