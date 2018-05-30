@@ -57,7 +57,7 @@ spec: &spec
           options:
             ores_precache_uris:
 <%- for ores_uri in ores_uris %>
-              - <%= ores_uri %>
+              - <%= ores_uri %>/v3/precache
 <%- endfor  %>
             eventbus_uri: <%= eventbus_uri %>
     /{api:sys}/queue:
