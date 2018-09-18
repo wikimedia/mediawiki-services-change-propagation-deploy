@@ -792,6 +792,19 @@ spec: &spec
                       query:
                         redirect: false
 
+              # Map tile cache invalidation
+              purge_map_tile:
+                topic: 'resource_change'
+                match:
+                  tags:
+                    - tilerator
+                exec:
+                  method: post
+                  uri: '/sys/purge/'
+                  body:
+                    - meta:
+                        uri: '{{message.meta.uri}}'
+
 
 # Number of worker processes to spawn.
 # Set to 0 to run everything in a single process without clustering.
