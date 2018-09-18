@@ -1,1 +1,2 @@
 env: beta
+concurrency: 1
