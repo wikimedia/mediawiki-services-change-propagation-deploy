@@ -75,7 +75,6 @@ spec: &spec
               compression.codec: <%= kafka_compression_codec %>
             concurrency: <%= concurrency %>
             startup_delay: 60000
-            enable_blacklist: true
             blacklist:
               # Wikipedia
               ca.wikipedia.org:
@@ -481,7 +480,7 @@ spec: &spec
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/mobile-sections-remaining/{message.page_title}/{{message.rev_id}}'
 
               page_delete:
-                enable_blacklist: false
+                disable_blacklist: true
                 topic: mediawiki.page-delete
                 ignore:
                   status:
@@ -533,7 +532,7 @@ spec: &spec
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/references/{message.page_title}'
 
               page_restore:
-                enable_blacklist: false
+                disable_blacklist: true
                 topic: mediawiki.page-undelete
                 match_not:
                   - meta:
@@ -555,7 +554,7 @@ spec: &spec
                     body: '{{globals.message}}'
 
               page_move:
-                enable_blacklist: false
+                disable_blacklist: true
                 topic: mediawiki.page-move
                 match_not:
                   - meta:
