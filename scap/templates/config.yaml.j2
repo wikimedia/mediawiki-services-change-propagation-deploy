@@ -846,12 +846,14 @@ logging:
   level: warn
   name: <%= log_name %>
   streams:
-    - host: <%= logstash_host %>
-      port: <%= logstash_port %>
-      type: gelf
     - level: info
       path: <%= log_file %>
       type: file
+    - type: syslog
+      host: localhost
+      port: <%= rsyslog_port %>
+      prefix: '@cee: '
+      name: node
   sampled_levels:
     trace/dedupe: 0.01
 
