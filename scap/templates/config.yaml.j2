@@ -310,10 +310,10 @@ spec: &spec
                   - match:
                       meta:
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
-                        domain: '/wiktionary.org$/'
+                        domain: '/en.wiktionary.org$/'
                       tags:
                         - purge
-                    exec: &mw_purge_wiktionary_rerender
+                    exec: &mw_purge_definitions_rerender
                       - method: get
                         # This even comes directly from MediaWiki, so title is encoded in MW-specific way.
                         # Re-encode the title in standard `encodeURIComponent` encoding.
@@ -329,6 +329,22 @@ spec: &spec
                         uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/definition/{decode(match.meta.uri.title)}'
                         headers:
                           cache-control: no-cache
+                        query:
+                          redirect: false
+                  - match:
+                      meta:
+                        uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
+                        domain: '/wiktionary.org$/'
+                      tags:
+                        - purge
+                    exec: &mw_purge_wiktionary_rerender
+                      - method: get
+                        # This even comes directly from MediaWiki, so title is encoded in MW-specific way.
+                        # Re-encode the title in standard `encodeURIComponent` encoding.
+                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{decode(match.meta.uri.title)}'
+                        headers:
+                          cache-control: no-cache
+                          if-unmodified-since: '{{date(message.meta.dt)}}'
                         query:
                           redirect: false
                   - match:
@@ -382,6 +398,13 @@ spec: &spec
                       tags:
                         - purge
                     exec: *mw_purge_wikipedia_rerender
+                  - match:
+                      meta:
+                        uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
+                        domain: '/en.wiktionary.org$/'
+                      tags:
+                        - purge
+                    exec: *mw_purge_definitions_rerender
                   - match:
                       meta:
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
