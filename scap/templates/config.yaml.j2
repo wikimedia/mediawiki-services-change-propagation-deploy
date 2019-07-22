@@ -59,7 +59,7 @@ spec: &spec
 <%- for ores_uri in ores_uris %>
               - <%= ores_uri %>/v3/precache
 <%- endfor  %>
-            eventbus_uri: <%= eventbus_uri %>/v1/events
+            event_service_uri: <%= event_service_uri %>
     /{api:sys}/queue:
       x-modules:
         - path: src/sys/kafka.js
