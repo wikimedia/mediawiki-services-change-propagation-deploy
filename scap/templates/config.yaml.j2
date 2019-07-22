@@ -608,6 +608,24 @@ spec: &spec
                   blacklist: 'html:{message.meta.uri}'
                 cases:
                   - match:
+                      $schema: '/^\/resource_change\/.*/'
+                      meta:
+                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
+                      tags: [ 'transcludes' ]
+                    exec:
+                      method: get
+                      uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{{match.meta.uri.title}}'
+                      headers:
+                        cache-control: no-cache
+                        if-unmodified-since: '{{date(message.root_event.dt)}}'
+                        x-restbase-mode: '{{message.tags[1]}}'
+                      query:
+                        redirect: false
+                    match_not:
+                      meta:
+                        domain: ceb.wikipedia.org
+# TEMP until the old-style queue of events processed
+                  - match:
                       meta:
                         schema_uri: 'resource_change/1'
                         uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
@@ -624,6 +642,19 @@ spec: &spec
                     match_not:
                       meta:
                         domain: ceb.wikipedia.org
+# ENDTEMP
+                  - match:
+                      $schema: '/^\/change-prop\/continue\/.*/'
+                    match_not:
+                      - meta:
+                          domain: ceb.wikipedia.org
+                      - original_event:
+                          # Block Scribunto Module dependencies as they create a lot of load
+                          # with supposingly very low actual effect
+                          meta:
+                            domain: '/wiktionary\.org$/'
+                          page_namespace: 828
+# TEMP until the old-style queue of events processed
                   - match:
                       meta:
                         schema_uri: 'continue/1'
@@ -636,6 +667,7 @@ spec: &spec
                           meta:
                             domain: '/wiktionary\.org$/'
                           page_namespace: 828
+# ENDTEMP
                     exec:
                       method: post
                       uri: '/sys/links/transcludes/{message.original_event.page_title}'
@@ -665,6 +697,21 @@ spec: &spec
                   blacklist: 'html:{message.meta.uri}'
                 cases:
                   - match:
+                      $schema: '/^\/resource_change\/.*/'
+                      meta:
+                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
+                      tags: [ 'backlinks' ]
+                    exec:
+                      method: get
+                      uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{{match.meta.uri.title}}'
+                      headers:
+                        cache-control: no-cache
+                        if-unmodified-since: '{{date(message.root_event.dt)}}'
+                        x-restbase-mode: '{{message.tags[1]}}'
+                      query:
+                        redirect: false
+# TEMP until the old-style queue of events processed
+                  - match:
                       meta:
                         schema_uri: 'resource_change/1'
                         uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
@@ -678,6 +725,14 @@ spec: &spec
                         x-restbase-mode: '{{message.tags[1]}}'
                       query:
                         redirect: false
+# ENDTEMP
+                  - match:
+                      $schema: '/^\/change-prop\/continue\/.*/'
+                    exec:
+                      method: post
+                      uri: '/sys/links/backlinks/{message.original_event.page_title}'
+                      body: '{{globals.message}}'
+# TEMP until the old-style queue of events processed
                   - match:
                       meta:
                         schema_uri: 'continue/1'
@@ -685,7 +740,7 @@ spec: &spec
                       method: post
                       uri: '/sys/links/backlinks/{message.original_event.page_title}'
                       body: '{{globals.message}}'
-
+# ENDTEMP
 
               # ORES caching updates
               ores_cache:
