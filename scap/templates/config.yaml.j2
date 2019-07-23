@@ -216,10 +216,11 @@ spec: &spec
                 <<: *summary_definition_rerender_spec
                 topic: 'change-prop.transcludes.resource-change'
 
-              mobile_rerender: &mobile_rerender_spec
+<%- for endpoint in rerendered_pcs_endpoints %>
+              <%= endpoint %>_rerender: &<%= endpoint %>_rerender_spec
                 topic: 'resource_change'
                 limiters:
-                  blacklist: 'mobile:{message.meta.uri}'
+                  blacklist: '<%= endpoint %>:{message.meta.uri}'
                 match:
                   meta:
                     uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/([^/]+)$/'
@@ -229,26 +230,17 @@ spec: &spec
                 exec:
                   - method: get
                     # Don't encode title since it should be already encoded
-                    uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/mobile-sections/{{match.meta.uri[1]}}'
+                    uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/<%= endpoint %>/{{match.meta.uri[1]}}'
                     query:
                       redirect: false
                     headers:
                       cache-control: no-cache
-                    # Until we start storing and actively rerendering PCS endpoints we still need to purge it from Varnish
-                  - method: post
-                    uri: '/sys/purge/'
-                    body:
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/media/{{match.meta.uri[1]}}'
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/metadata/{{match.meta.uri[1]}}'
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/references/{{match.meta.uri[1]}}'
 
-              mobile_rerender_transcludes: &mobile_rerender_transcludes_spec
-                <<: *mobile_rerender_spec
+              <%= endpoint %>_rerender_transcludes: &<%= endpoint %>_rerender_transcludes_spec
+                <<: *<%= endpoint %>_rerender_spec
                 topic: 'change-prop.transcludes.resource-change'
 
+<%- endfor %>
               purge_varnish: &purge_varnish_spec
                 enable_blacklist: false
                 topic: 'resource_change'
@@ -501,6 +493,12 @@ spec: &spec
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/mobile-sections-lead/{message.page_title}/{{message.rev_id}}'
                       - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/mobile-sections-remaining/{message.page_title}/{{message.rev_id}}'
+<%- for endpoint in rerendered_pcs_endpoints %>
+                      - meta:
+                          uri: '//{{message.meta.domain}}/api/rest_v1/page/<%= endpoint %>/{message.page_title}/{{message.rev_id}}'
+<%- endfor %>
+                      - meta:
+                          uri: '//{{message.meta.domain}}/api/rest_v1/page/media/{message.page_title}/{{message.rev_id}}'
 
               page_delete:
                 disable_blacklist: true
@@ -547,12 +545,12 @@ spec: &spec
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/mobile-sections-lead/{message.page_title}'
                       - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/mobile-sections-remaining/{message.page_title}'
+<%- for endpoint in rerendered_pcs_endpoints %>
+                      - meta:
+                          uri: '//{{message.meta.domain}}/api/rest_v1/page/<%= endpoint %>/{message.page_title}'
+<%- endfor %>
                       - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/media/{message.page_title}'
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/metadata/{message.page_title}'
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/references/{message.page_title}'
 
               page_restore:
                 disable_blacklist: true

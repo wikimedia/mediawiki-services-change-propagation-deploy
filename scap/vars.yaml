@@ -24,3 +24,9 @@ env: production
 kafka_max_bytes: 4194304
 kafka_compression_codec: snappy
 event_service_uri: 'localhost:32192/v1/events'
+rerendered_pcs_endpoints:
+  - mobile-sections
+  - media-list
+  - metadata
+  - mobile-html
+  - references
