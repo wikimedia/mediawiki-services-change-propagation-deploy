@@ -184,9 +184,9 @@ spec: &spec
                         - restbase
                     match_not:
                       - meta:
-                          domain: '/wiktionary\.org$/'
+                          domain: '/wiktionary\.<%= domain_zone %>$/'
                       - meta:
-                          domain: /\.wikidata\.org$/
+                          domain: /\.wikidata\.<%= domain_zone %>$/
                     exec:
                       method: get
                       # Don't encode title since it should be already encoded
@@ -200,7 +200,7 @@ spec: &spec
                         # These URIs are coming from RESTBase, so we know that article titles will be normalized
                         # and main namespace articles will not have : (uri-encoded, so %3a or %3A)
                         uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/((?:(?!%3a|%3A|\/).)+)$/'
-                        domain: '/^en\.wiktionary\.org$/'
+                        domain: '/^en\.wiktionary\.<%= domain_zone %>$/'
                       tags:
                         - restbase
                     exec:
@@ -224,7 +224,7 @@ spec: &spec
                 match:
                   meta:
                     uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/([^/]+)$/'
-                    domain: '/\.wikipedia\.org$/'
+                    domain: '/\.wikipedia\.<%= domain_zone %>$/'
                   tags:
                     - restbase
                 exec:
@@ -251,7 +251,7 @@ spec: &spec
                     - restbase
                 match_not:
                   meta:
-                    domain: /\.wikidata\.org$/
+                    domain: /\.wikidata\.<%= domain_zone %>$/
                 exec:
                   method: post
                   uri: '/sys/purge/'
@@ -272,7 +272,7 @@ spec: &spec
                   - match:
                       meta:
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
-                        domain: '/\.wikipedia\.org$/'
+                        domain: '/\.wikipedia\.<%= domain_zone %>$/'
                       tags:
                         - purge
                     exec: &mw_purge_wikipedia_rerender
@@ -302,7 +302,7 @@ spec: &spec
                   - match:
                       meta:
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
-                        domain: '/en.wiktionary.org$/'
+                        domain: '/en.wiktionary.<%= domain_zone %>$/'
                       tags:
                         - purge
                     exec: &mw_purge_definitions_rerender
@@ -326,7 +326,7 @@ spec: &spec
                   - match:
                       meta:
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
-                        domain: '/wiktionary.org$/'
+                        domain: '/wiktionary.<%= domain_zone %>$/'
                       tags:
                         - purge
                     exec: &mw_purge_wiktionary_rerender
@@ -346,14 +346,14 @@ spec: &spec
                         - purge
                     match_not: &others_match_not
                       - meta:
-                          domain: '/\.wikipedia\.org$/'
+                          domain: '/\.wikipedia\.<%= domain_zone %>$/'
                       - meta:
-                          domain: '/\.wiktionary\.org$/'
+                          domain: '/\.wiktionary\.<%= domain_zone %>$/'
                       - meta:
-                          domain: /\.wikidata\.org$/
+                          domain: /\.wikidata\.<%= domain_zone %>$/
                         page_namespace: 0
                       - meta:
-                          domain: /\.wikidata\.org$/
+                          domain: /\.wikidata\.<%= domain_zone %>$/
                         page_namespace: 120
                     exec: &mw_purge_others_rerender
                       - method: get
@@ -386,21 +386,21 @@ spec: &spec
                   - match:
                       meta:
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
-                        domain: '/\.wikipedia\.org$/'
+                        domain: '/\.wikipedia\.<%= domain_zone %>$/'
                       tags:
                         - purge
                     exec: *mw_purge_wikipedia_rerender
                   - match:
                       meta:
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
-                        domain: '/en.wiktionary.org$/'
+                        domain: '/en.wiktionary.<%= domain_zone %>$/'
                       tags:
                         - purge
                     exec: *mw_purge_definitions_rerender
                   - match:
                       meta:
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
-                        domain: '/wiktionary.org$/'
+                        domain: '/wiktionary.<%= domain_zone %>$/'
                       tags:
                         - purge
                     exec: *mw_purge_wiktionary_rerender
@@ -411,14 +411,14 @@ spec: &spec
                         - purge
                     match_not: &others_match_not
                        - meta:
-                           domain: '/\.wikipedia\.org$/'
+                           domain: '/\.wikipedia\.<%= domain_zone %>$/'
                        - meta:
-                           domain: '/\.wiktionary\.org$/'
+                           domain: '/\.wiktionary\.<%= domain_zone %>$/'
                        - meta:
-                           domain: /\.wikidata\.org$/
+                           domain: /\.wikidata\.<%= domain_zone %>$/
                          page_namespace: 0
                        - meta:
-                           domain: /\.wikidata\.org$/
+                           domain: /\.wikidata\.<%= domain_zone %>$/
                          page_namespace: 120
                     exec: *mw_purge_others_rerender
 
@@ -434,15 +434,15 @@ spec: &spec
                   rev_content_changed: true
                 match_not:
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 0
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 120
                     # Block Scribunto Module dependencies as they create a lot of load
                     # with supposingly very low actual effect
                   - meta:
-                      domain: '/wiktionary\.org$/'
+                      domain: '/wiktionary\.<%= domain_zone %>$/'
                     page_namespace: 828
                 exec:
                   - method: get
@@ -466,10 +466,10 @@ spec: &spec
                     - 412
                 match_not:
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 0
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 120
                 exec:
                   - method: get
@@ -509,10 +509,10 @@ spec: &spec
                     - 412
                 match_not:
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 0
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 120
                 exec:
                   - method: get
@@ -557,10 +557,10 @@ spec: &spec
                 topic: mediawiki.page-undelete
                 match_not:
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 0
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 120
                 exec:
                   - method: get
@@ -579,10 +579,10 @@ spec: &spec
                 topic: mediawiki.page-move
                 match_not:
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 0
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 120
                 exec:
                   - method: get
@@ -631,7 +631,7 @@ spec: &spec
                           # Block Scribunto Module dependencies as they create a lot of load
                           # with supposingly very low actual effect
                           meta:
-                            domain: '/wiktionary\.org$/'
+                            domain: '/wiktionary\.<%= domain_zone %>$/'
                           page_namespace: 828
                     exec:
                       method: post
@@ -646,10 +646,10 @@ spec: &spec
                     - 404 # Sometimes occasional 404s happen because of the mysql replication lag, so retry
                 match_not:
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 0
                   - meta:
-                      domain: /\.wikidata\.org$/
+                      domain: /\.wikidata\.<%= domain_zone %>$/
                     page_namespace: 120
                 exec:
                   - method: post
@@ -727,7 +727,7 @@ spec: &spec
                   - match:
                       meta:
                         uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
-                        domain: '/\.wikipedia\.org$/'
+                        domain: '/\.wikipedia\.<%= domain_zone %>$/'
                       tags: [ 'wikidata' ]
                     exec:
                       - method: get
@@ -765,10 +765,10 @@ spec: &spec
                         page_image: '/.+/' # Regex that matches anything just to check the prop is set
                     match_not:
                       - meta:
-                          domain: /\.wikidata\.org$/
+                          domain: /\.wikidata\.<%= domain_zone %>$/
                         page_namespace: 0
                       - meta:
-                          domain: /\.wikidata\.org$/
+                          domain: /\.wikidata\.<%= domain_zone %>$/
                         page_namespace: 120
                     exec:
                       method: get
@@ -782,10 +782,10 @@ spec: &spec
                         page_image: '/.+/' # Regex that matches anything just to check the prop is set
                     match_not:
                       - meta:
-                          domain: /\.wikidata\.org$/
+                          domain: /\.wikidata\.<%= domain_zone %>$/
                         page_namespace: 0
                       - meta:
-                          domain: /\.wikidata\.org$/
+                          domain: /\.wikidata\.<%= domain_zone %>$/
                         page_namespace: 120
                     exec:
                       method: get
@@ -801,7 +801,7 @@ spec: &spec
                 cases:
                   - match:
                       meta:
-                        domain: '/\.wikipedia\.org$/'
+                        domain: '/\.wikipedia\.<%= domain_zone %>$/'
                       added_properties:
                         page_image: '/.+/' # Regex that matches anything just to check the prop is set
                     exec:
@@ -813,7 +813,7 @@ spec: &spec
                         redirect: false
                   - match:
                       meta:
-                        domain: '/\.wikipedia\.org$/'
+                        domain: '/\.wikipedia\.<%= domain_zone %>$/'
                       removed_properties:
                         page_image: '/.+/' # Regex that matches anything just to check the prop is set
                     exec:
