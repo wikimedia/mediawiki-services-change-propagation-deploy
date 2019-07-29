@@ -71,8 +71,16 @@ spec: &spec
               # so we increase the max message size in kafka and have to
               # ajust the consumers accordingly.
               fetch.message.max.bytes: <%= kafka_max_bytes %>
+              # Silence noisy connection reaper logging
+              # https://github.com/Blizzard/node-rdkafka/issues/326
+              # https://github.com/edenhill/librdkafka/issues/768#issuecomment-246302856
+              log.connection.close: false
             producer:
               compression.codec: <%= kafka_compression_codec %>
+              # Silence noisy connection reaper logging
+              # https://github.com/Blizzard/node-rdkafka/issues/326
+              # https://github.com/edenhill/librdkafka/issues/768#issuecomment-246302856
+              log.connection.close: false
             concurrency: <%= concurrency %>
             startup_delay: 60000
             blacklist:
