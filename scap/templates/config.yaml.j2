@@ -376,13 +376,6 @@ spec: &spec
                   - match:
                       meta:
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
-                        domain: '/en.wiktionary.<%= domain_zone %>$/'
-                      tags:
-                        - purge
-                    exec: *mw_purge_definitions_rerender
-                  - match:
-                      meta:
-                        uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
                         domain: '/wiktionary.<%= domain_zone %>$/'
                       tags:
                         - purge
