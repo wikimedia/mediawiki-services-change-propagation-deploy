@@ -223,27 +223,6 @@ spec: &spec
                 <<: *summary_definition_rerender_spec
                 topic: 'change-prop.transcludes.resource-change'
 
-              metadata_purge: &metadata_purge_spec
-                topic: 'resource_change'
-                limiters:
-                  blacklist: 'metadata:{message.meta.uri}'
-                match:
-                  meta:
-                    uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/(?<title>.+)$/'
-                    domain: '/\.(?:wikipedia|wiktionary|wikivoyage)\.<%= domain_zone %>$/'
-                  tags:
-                    - restbase
-                exec:
-                  method: post
-                  uri: '/sys/purge/'
-                  body:
-                    - meta:
-                        uri: '//{{message.meta.domain}}/api/rest_v1/page/metadata/{{match.meta.uri.title}}'
-
-              metadata_purge_transcludes: &metadata_purge_transcludes_spec
-                <<: *metadata_purge_spec
-                topic: 'change-prop.transcludes.resource-change'
-
 <%- for endpoint in rerendered_pcs_endpoints %>
               <%= endpoint %>_rerender: &<%= endpoint %>_rerender_spec
                 topic: 'resource_change'
@@ -485,23 +464,13 @@ spec: &spec
                       - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/html/{message.page_title}/{{message.rev_id}}'
                       - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/mobile-sections/{message.page_title}/{{message.rev_id}}'
-                      - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/mobile-sections-lead/{message.page_title}/{{message.rev_id}}'
                       - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/mobile-sections-remaining/{message.page_title}/{{message.rev_id}}'
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/metadata/{message.page_title}'
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/metadata/{message.page_title}/{{message.rev_id}}'
 <%- for endpoint in rerendered_pcs_endpoints %>
                       - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/<%= endpoint %>/{message.page_title}/{{message.rev_id}}'
 <%- endfor %>
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/media/{message.page_title}'
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/media/{message.page_title}/{{message.rev_id}}'
 
               page_delete:
                 disable_blacklist: true
@@ -543,25 +512,15 @@ spec: &spec
                       - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/definition/{message.page_title}'
                       - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/mobile-sections/{message.page_title}'
-                      - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/mobile-sections-lead/{message.page_title}'
                       - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/mobile-sections-remaining/{message.page_title}'
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/metadata/{message.page_title}'
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/metadata/{message.page_title}/{{message.rev_id}}'
 <%- for endpoint in rerendered_pcs_endpoints %>
                       - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/<%= endpoint %>/{message.page_title}'
                       - meta:
                           uri: '//{{message.meta.domain}}/api/rest_v1/page/<%= endpoint %>/{message.page_title}/{{message.rev_id}}'
 <%- endfor %>
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/media/{message.page_title}'
-                      - meta:
-                          uri: '//{{message.meta.domain}}/api/rest_v1/page/media/{message.page_title}/{{message.rev_id}}'
 
               page_restore:
                 disable_blacklist: true
