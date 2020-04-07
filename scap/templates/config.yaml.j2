@@ -371,20 +371,20 @@ spec: &spec
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
                         domain: '/\.wikipedia\.<%= domain_zone %>$/'
                       tags:
-                        - purge
+                        - null_edit
                     exec: *mw_purge_wikipedia_rerender
                   - match:
                       meta:
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
                         domain: '/wiktionary.<%= domain_zone %>$/'
                       tags:
-                        - purge
+                        - null_edit
                     exec: *mw_purge_wiktionary_rerender
                   - match:
                       meta:
                         uri: '/^https?:\/\/[^\/]+\/wiki\/(?<title>.+)$/'
                       tags:
-                        - purge
+                        - null_edit
                     match_not: &others_match_not
                        - meta:
                            domain: '/\.wikipedia\.<%= domain_zone %>$/'
