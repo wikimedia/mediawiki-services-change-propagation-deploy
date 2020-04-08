@@ -474,7 +474,9 @@ spec: &spec
 
               page_delete:
                 disable_blacklist: true
-                topic: mediawiki.page-delete
+                topics:
+                  - mediawiki.page-delete
+                  - mediawiki.page-suppress
                 ignore:
                   status:
                     - 404 # 404 is a normal response for page deletion
