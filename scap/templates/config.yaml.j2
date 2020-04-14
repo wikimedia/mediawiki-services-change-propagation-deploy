@@ -51,6 +51,7 @@ spec: &spec
                   host: '{{message.meta.domain}}'
                 body:
                   formatversion: 2
+<%- if env == 'beta' %>
     /sys/ores:
       x-modules:
         - path: src/sys/ores_updates.js
@@ -60,6 +61,7 @@ spec: &spec
               - <%= ores_uri %>/v3/precache
 <%- endfor  %>
             event_service_uri: <%= event_service_uri %>
+<%- endif %>
     /{api:sys}/queue:
       x-modules:
         - path: src/sys/kafka.js
@@ -270,6 +272,7 @@ spec: &spec
                 <<: *purge_varnish_spec
                 topic: 'change-prop.transcludes.resource-change'
 
+<%- if env == 'beta' %>
               # RESTBase update jobs
               mw_purge:
                 topic: resource_change
@@ -397,6 +400,55 @@ spec: &spec
                            domain: /\.wikidata\.<%= domain_zone %>$/
                          page_namespace: 120
                     exec: *mw_purge_others_rerender
+
+              # ORES caching updates
+              ores_cache:
+                topic: mediawiki.revision-create
+                concurrency: 25
+                ignore:
+                  status:
+                    - 503
+                exec:
+                  method: post
+                  uri: '/sys/ores/'
+                  query:
+                    postevent: true
+                  body: '{{globals.message}}'
+
+              on_wikidata_description_change:
+                topic: change-prop.wikidata.resource-change
+                cases:
+                  - match:
+                      meta:
+                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
+                        domain: '/\.wikipedia\.<%= domain_zone %>$/'
+                      tags: [ 'wikidata' ]
+                    exec:
+                      - method: get
+                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri.title}}'
+                        headers:
+                          cache-control: no-cache
+                        query:
+                          redirect: false
+                      - method: get
+                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/mobile-sections/{{match.meta.uri.title}}'
+                        headers:
+                          cache-control: no-cache
+                        query:
+                          redirect: false
+                  - match:
+                      meta:
+                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
+                      tags: [ 'wikidata' ]
+                    match_not: *others_match_not
+                    exec:
+                      - method: get
+                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri.title}}'
+                        headers:
+                          cache-control: no-cache
+                        query:
+                          redirect: false
+<%- endif %>
 
               page_edit:
                 topic: mediawiki.revision-create
@@ -654,20 +706,6 @@ spec: &spec
                       uri: '/sys/links/backlinks/{message.original_event.page_title}'
                       body: '{{globals.message}}'
 
-              # ORES caching updates
-              ores_cache:
-                topic: mediawiki.revision-create
-                concurrency: 25
-                ignore:
-                  status:
-                    - 503
-                exec:
-                  method: post
-                  uri: '/sys/ores/'
-                  query:
-                    postevent: true
-                  body: '{{globals.message}}'
-
               wikidata_description_on_edit:
                 topic: mediawiki.revision-create
                 match:
@@ -692,40 +730,6 @@ spec: &spec
                   method: post
                   uri: '/sys/links/wikidata_descriptions'
                   body: '{{globals.message}}'
-
-              on_wikidata_description_change:
-                topic: change-prop.wikidata.resource-change
-                cases:
-                  - match:
-                      meta:
-                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
-                        domain: '/\.wikipedia\.<%= domain_zone %>$/'
-                      tags: [ 'wikidata' ]
-                    exec:
-                      - method: get
-                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri.title}}'
-                        headers:
-                          cache-control: no-cache
-                        query:
-                          redirect: false
-                      - method: get
-                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/mobile-sections/{{match.meta.uri.title}}'
-                        headers:
-                          cache-control: no-cache
-                        query:
-                          redirect: false
-                  - match:
-                      meta:
-                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
-                      tags: [ 'wikidata' ]
-                    match_not: *others_match_not
-                    exec:
-                      - method: get
-                        uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/summary/{{match.meta.uri.title}}'
-                        headers:
-                          cache-control: no-cache
-                        query:
-                          redirect: false
 
               # Rerender summary when pageimages page property change
               page_images_summary:
