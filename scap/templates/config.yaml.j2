@@ -225,31 +225,6 @@ spec: &spec
                 <<: *summary_definition_rerender_spec
                 topic: 'change-prop.transcludes.resource-change'
 
-<%- for endpoint in rerendered_pcs_endpoints %>
-              <%= endpoint %>_rerender: &<%= endpoint %>_rerender_spec
-                topic: 'resource_change'
-                limiters:
-                  blacklist: '<%= endpoint %>:{message.meta.uri}'
-                match:
-                  meta:
-                    uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/([^/]+)$/'
-                    domain: '/\.wikipedia\.<%= domain_zone %>$/'
-                  tags:
-                    - restbase
-                exec:
-                  method: get
-                  # Don't encode title since it should be already encoded
-                  uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/<%= endpoint %>/{{match.meta.uri[1]}}'
-                  query:
-                    redirect: false
-                  headers:
-                    cache-control: no-cache
-
-              <%= endpoint %>_rerender_transcludes: &<%= endpoint %>_rerender_transcludes_spec
-                <<: *<%= endpoint %>_rerender_spec
-                topic: 'change-prop.transcludes.resource-change'
-
-<% endfor %>
               purge_varnish: &purge_varnish_spec
                 enable_blacklist: false
                 topic: 'resource_change'
@@ -680,6 +655,7 @@ spec: &spec
                     uri: '/sys/links/backlinks/{message.page_title}'
                     body: '{{globals.message}}'
 
+<%- if env == 'beta' %>
               on_backlinks_update:
                 topic: change-prop.backlinks.resource-change
                 limiters:
@@ -799,19 +775,32 @@ spec: &spec
                         cache-control: no-cache
                       query:
                         redirect: false
-
-              # Map tile cache invalidation
-              purge_map_tile:
+<%- for endpoint in rerendered_pcs_endpoints %>
+              <%= endpoint %>_rerender: &<%= endpoint %>_rerender_spec
                 topic: 'resource_change'
+                limiters:
+                  blacklist: '<%= endpoint %>:{message.meta.uri}'
                 match:
+                  meta:
+                    uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/page\/html\/([^/]+)$/'
+                    domain: '/\.wikipedia\.<%= domain_zone %>$/'
                   tags:
-                    - tilerator
+                    - restbase
                 exec:
-                  method: post
-                  uri: '/sys/purge/'
-                  body:
-                    - meta:
-                        uri: '{{message.meta.uri}}'
+                  method: get
+                  # Don't encode title since it should be already encoded
+                  uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/<%= endpoint %>/{{match.meta.uri[1]}}'
+                  query:
+                    redirect: false
+                  headers:
+                    cache-control: no-cache
+
+              <%= endpoint %>_rerender_transcludes: &<%= endpoint %>_rerender_transcludes_spec
+                <<: *<%= endpoint %>_rerender_spec
+                topic: 'change-prop.transcludes.resource-change'
+
+<% endfor %>
+<%- endif %>
 
 
 # Number of worker processes to spawn.
