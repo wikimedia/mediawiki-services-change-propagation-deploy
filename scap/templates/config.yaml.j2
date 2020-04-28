@@ -182,6 +182,69 @@ spec: &spec
                 - '/Commons:WikiProject_Aviation\/recent_uploads\//'
                 - '/\/(?:User|Benutzer):/'
             templates:
+
+              purge_varnish: &purge_varnish_spec
+                enable_blacklist: false
+                topic: 'resource_change'
+                match:
+                  meta:
+                    uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/(?<title>.+)$/'
+                  tags:
+                    - restbase
+                match_not:
+                  meta:
+                    domain: /\.wikidata\.<%= domain_zone %>$/
+                exec:
+                  method: post
+                  uri: '/sys/purge/'
+                  body:
+                    - meta:
+                        uri: '//{{message.meta.domain}}/api/rest_v1/{{match.meta.uri.title}}'
+
+              purge_varnish_transcludes: &purge_varnish_transcludes_spec
+                <<: *purge_varnish_spec
+                topic: 'change-prop.transcludes.resource-change'
+
+              on_transclusion_update:
+                concurrency: <%= concurrency * 4 %>
+                topic: change-prop.transcludes.resource-change
+                limiters:
+                  blacklist: 'html:{message.meta.uri}'
+                cases:
+                  - match:
+                      $schema: '/^\/resource_change\/.*/'
+                      meta:
+                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
+                      tags: [ 'transcludes' ]
+                    exec:
+                      method: get
+                      uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{{match.meta.uri.title}}'
+                      headers:
+                        cache-control: no-cache
+                        if-unmodified-since: '{{date(message.root_event.dt)}}'
+                        x-restbase-mode: '{{message.tags[1]}}'
+                      query:
+                        redirect: false
+                    match_not:
+                      meta:
+                        domain: ceb.wikipedia.org
+                  - match:
+                      $schema: '/^\/change-prop\/continue\/.*/'
+                    match_not:
+                      - meta:
+                          domain: ceb.wikipedia.org
+                      - original_event:
+                          # Block Scribunto Module dependencies as they create a lot of load
+                          # with supposingly very low actual effect
+                          meta:
+                            domain: '/wiktionary\.<%= domain_zone %>$/'
+                          page_namespace: 828
+                    exec:
+                      method: post
+                      uri: '/sys/links/transcludes/{message.original_event.page_title}'
+                      body: '{{globals.message}}'
+
+<%- if env == 'beta' %>
               summary_definition_rerender: &summary_definition_rerender_spec
                 topic: 'resource_change'
                 limiters:
@@ -225,29 +288,6 @@ spec: &spec
                 <<: *summary_definition_rerender_spec
                 topic: 'change-prop.transcludes.resource-change'
 
-              purge_varnish: &purge_varnish_spec
-                enable_blacklist: false
-                topic: 'resource_change'
-                match:
-                  meta:
-                    uri: '/^https?:\/\/[^\/]+\/api\/rest_v1\/(?<title>.+)$/'
-                  tags:
-                    - restbase
-                match_not:
-                  meta:
-                    domain: /\.wikidata\.<%= domain_zone %>$/
-                exec:
-                  method: post
-                  uri: '/sys/purge/'
-                  body:
-                    - meta:
-                        uri: '//{{message.meta.domain}}/api/rest_v1/{{match.meta.uri.title}}'
-
-              purge_varnish_transcludes: &purge_varnish_transcludes_spec
-                <<: *purge_varnish_spec
-                topic: 'change-prop.transcludes.resource-change'
-
-<%- if env == 'beta' %>
               # RESTBase update jobs
               mw_purge:
                 topic: resource_change
@@ -423,7 +463,6 @@ spec: &spec
                           cache-control: no-cache
                         query:
                           redirect: false
-<%- endif %>
 
               page_edit:
                 topic: mediawiki.revision-create
@@ -598,45 +637,6 @@ spec: &spec
                     query:
                       redirect: false
 
-              on_transclusion_update:
-                concurrency: <%= concurrency * 4 %>
-                topic: change-prop.transcludes.resource-change
-                limiters:
-                  blacklist: 'html:{message.meta.uri}'
-                cases:
-                  - match:
-                      $schema: '/^\/resource_change\/.*/'
-                      meta:
-                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
-                      tags: [ 'transcludes' ]
-                    exec:
-                      method: get
-                      uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{{match.meta.uri.title}}'
-                      headers:
-                        cache-control: no-cache
-                        if-unmodified-since: '{{date(message.root_event.dt)}}'
-                        x-restbase-mode: '{{message.tags[1]}}'
-                      query:
-                        redirect: false
-                    match_not:
-                      meta:
-                        domain: ceb.wikipedia.org
-                  - match:
-                      $schema: '/^\/change-prop\/continue\/.*/'
-                    match_not:
-                      - meta:
-                          domain: ceb.wikipedia.org
-                      - original_event:
-                          # Block Scribunto Module dependencies as they create a lot of load
-                          # with supposingly very low actual effect
-                          meta:
-                            domain: '/wiktionary\.<%= domain_zone %>$/'
-                          page_namespace: 828
-                    exec:
-                      method: post
-                      uri: '/sys/links/transcludes/{message.original_event.page_title}'
-                      body: '{{globals.message}}'
-
               page_create:
                 topic: mediawiki.page-create
                 retry_on:
@@ -655,7 +655,6 @@ spec: &spec
                     uri: '/sys/links/backlinks/{message.page_title}'
                     body: '{{globals.message}}'
 
-<%- if env == 'beta' %>
               on_backlinks_update:
                 topic: change-prop.backlinks.resource-change
                 limiters:
