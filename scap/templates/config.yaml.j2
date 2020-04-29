@@ -205,45 +205,6 @@ spec: &spec
                 <<: *purge_varnish_spec
                 topic: 'change-prop.transcludes.resource-change'
 
-              on_transclusion_update:
-                concurrency: <%= concurrency * 4 %>
-                topic: change-prop.transcludes.resource-change
-                limiters:
-                  blacklist: 'html:{message.meta.uri}'
-                cases:
-                  - match:
-                      $schema: '/^\/resource_change\/.*/'
-                      meta:
-                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
-                      tags: [ 'transcludes' ]
-                    exec:
-                      method: get
-                      uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{{match.meta.uri.title}}'
-                      headers:
-                        cache-control: no-cache
-                        if-unmodified-since: '{{date(message.root_event.dt)}}'
-                        x-restbase-mode: '{{message.tags[1]}}'
-                      query:
-                        redirect: false
-                    match_not:
-                      meta:
-                        domain: ceb.wikipedia.org
-                  - match:
-                      $schema: '/^\/change-prop\/continue\/.*/'
-                    match_not:
-                      - meta:
-                          domain: ceb.wikipedia.org
-                      - original_event:
-                          # Block Scribunto Module dependencies as they create a lot of load
-                          # with supposingly very low actual effect
-                          meta:
-                            domain: '/wiktionary\.<%= domain_zone %>$/'
-                          page_namespace: 828
-                    exec:
-                      method: post
-                      uri: '/sys/links/transcludes/{message.original_event.page_title}'
-                      body: '{{globals.message}}'
-
 <%- if env == 'beta' %>
               summary_definition_rerender: &summary_definition_rerender_spec
                 topic: 'resource_change'
@@ -799,6 +760,45 @@ spec: &spec
                 topic: 'change-prop.transcludes.resource-change'
 
 <% endfor %>
+              on_transclusion_update:
+                concurrency: <%= concurrency * 4 %>
+                topic: change-prop.transcludes.resource-change
+                limiters:
+                  blacklist: 'html:{message.meta.uri}'
+                cases:
+                  - match:
+                      $schema: '/^\/resource_change\/.*/'
+                      meta:
+                        uri: '/https?:\/\/[^\/]+\/wiki\/(?<title>.+)/'
+                      tags: [ 'transcludes' ]
+                    exec:
+                      method: get
+                      uri: '<%= restbase_uri %>/{{message.meta.domain}}/v1/page/html/{{match.meta.uri.title}}'
+                      headers:
+                        cache-control: no-cache
+                        if-unmodified-since: '{{date(message.root_event.dt)}}'
+                        x-restbase-mode: '{{message.tags[1]}}'
+                      query:
+                        redirect: false
+                    match_not:
+                      meta:
+                        domain: ceb.wikipedia.org
+                  - match:
+                      $schema: '/^\/change-prop\/continue\/.*/'
+                    match_not:
+                      - meta:
+                          domain: ceb.wikipedia.org
+                      - original_event:
+                          # Block Scribunto Module dependencies as they create a lot of load
+                          # with supposingly very low actual effect
+                          meta:
+                            domain: '/wiktionary\.<%= domain_zone %>$/'
+                          page_namespace: 828
+                    exec:
+                      method: post
+                      uri: '/sys/links/transcludes/{message.original_event.page_title}'
+                      body: '{{globals.message}}'
+
 <%- endif %>
 
 
