@@ -183,6 +183,18 @@ spec: &spec
                 - '/\/(?:User|Benutzer):/'
             templates:
 
+<%- if env == 'production' %>
+              purge_varnish: &purge_varnish_spec
+                enable_blacklist: false
+                topic: 'resource-purge'
+                # No match section here because we plan on matching *all* events in this topic
+                exec:
+                  method: post
+                  uri: '/sys/purge/'
+                  body:
+                    - meta:
+                        uri: '{{message.meta.uri}}'
+<%- else %>
               purge_varnish: &purge_varnish_spec
                 enable_blacklist: false
                 topic: 'resource_change'
@@ -204,6 +216,7 @@ spec: &spec
               purge_varnish_transcludes: &purge_varnish_transcludes_spec
                 <<: *purge_varnish_spec
                 topic: 'change-prop.transcludes.resource-change'
+<%- endif %>
 
 <%- if env == 'beta' %>
               summary_definition_rerender: &summary_definition_rerender_spec
