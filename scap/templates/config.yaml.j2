@@ -183,6 +183,8 @@ spec: &spec
                 - '/\/(?:User|Benutzer):/'
             templates:
 
+# We have broke purging in production, see T252142
+# so for now we enable both purging types in production.
 <%- if env == 'production' %>
               purge_varnish: &purge_varnish_spec
                 enable_blacklist: false
@@ -194,7 +196,8 @@ spec: &spec
                   body:
                     - meta:
                         uri: '{{message.meta.uri}}'
-<%- else %>
+<%- endif %>
+
               purge_varnish: &purge_varnish_spec
                 enable_blacklist: false
                 topic: 'resource_change'
@@ -216,7 +219,6 @@ spec: &spec
               purge_varnish_transcludes: &purge_varnish_transcludes_spec
                 <<: *purge_varnish_spec
                 topic: 'change-prop.transcludes.resource-change'
-<%- endif %>
 
 <%- if env == 'beta' %>
               summary_definition_rerender: &summary_definition_rerender_spec
