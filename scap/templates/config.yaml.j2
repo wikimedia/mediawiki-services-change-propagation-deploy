@@ -186,7 +186,7 @@ spec: &spec
 # We have broke purging in production, see T252142
 # so for now we enable both purging types in production.
 <%- if env == 'production' %>
-              purge_varnish: &purge_varnish_spec
+              process_resource_purge:
                 enable_blacklist: false
                 topic: 'resource-purge'
                 # No match section here because we plan on matching *all* events in this topic
