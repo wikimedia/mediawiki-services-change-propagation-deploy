@@ -183,9 +183,9 @@ spec: &spec
                 - '/\/(?:User|Benutzer):/'
             templates:
 
-# We have broke purging in production, see T252142
-# so for now we enable both purging types in production.
+
 <%- if env == 'production' %>
+              # We purge for all events in this topic, messages coming from k8s
               process_resource_purge:
                 enable_blacklist: false
                 topic: 'resource-purge'
@@ -198,6 +198,8 @@ spec: &spec
                         uri: '{{message.meta.uri}}'
 <%- endif %>
 
+
+<%- if env == 'beta' %>
               purge_varnish: &purge_varnish_spec
                 enable_blacklist: false
                 topic: 'resource_change'
@@ -220,7 +222,6 @@ spec: &spec
                 <<: *purge_varnish_spec
                 topic: 'change-prop.transcludes.resource-change'
 
-<%- if env == 'beta' %>
               summary_definition_rerender: &summary_definition_rerender_spec
                 topic: 'resource_change'
                 limiters:
